@@ -333,30 +333,17 @@
                         <label class="form-label-custom">Change</label>
                         <div style="padding: 10px 14px; background: var(--accent-50); border-radius: var(--radius-md); font-weight: 700; color: var(--accent-700); font-size: 1.1rem;" id="changeAmount">₹ 0.00</div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label-custom">Ref no</label>
-                        <input type="text" class="pharmacy-input" id="cashRefNo" maxlength="30" placeholder="Ref No">
-                    </div>
                 </div>
             </div>
 
             <!-- Card Payment -->
             <div class="payment-detail-form" id="paymentCard">
                 <div class="row g-2">
-                    <div class="col-md-4">
-                        <label class="form-label-custom">Card Type</label>
-                        <select class="pharmacy-input" id="cardType">
-                            <option>Visa</option>
-                            <option>MasterCard</option>
-                            <option>RuPay</option>
-                            <option>Amex</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label-custom">Reference No</label>
-                        <input type="text" class="pharmacy-input" id="cardLast4" maxlength="30" placeholder="Ref No">
+                        <input type="text" class="pharmacy-input" id="cardRefNo" maxlength="30" placeholder="Ref No">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label-custom">Amount</label>
                         <input type="number" class="pharmacy-input" id="cardAmount" placeholder="0.00" step="0.01">
                     </div>
@@ -366,21 +353,11 @@
             <!-- UPI Payment -->
             <div class="payment-detail-form" id="paymentUPI">
                 <div class="row g-2">
-                    <div class="col-md-4">
-                        <label class="form-label-custom">Select UPI</label>
-                        <select class="pharmacy-input" id="upiType">
-                            <option>GPay</option>
-                            <option>PhonePe</option>
-                            <option>Paytm</option>
-                            <option>BHIM</option>
-                            <option>Other</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label-custom">Reference No</label>
-                        <input type="text" class="pharmacy-input" id="upiId" maxlength="30" placeholder="Ref No">
+                        <input type="text" class="pharmacy-input" id="upiRefNo" maxlength="30" placeholder="Ref No">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label-custom">Amount</label>
                         <input type="number" class="pharmacy-input" id="upiAmount" placeholder="0.00" step="0.01">
                     </div>
@@ -393,18 +370,24 @@
                     <div class="col-md-4">
                         <label class="form-label-custom">Cash</label>
                         <input type="number" class="pharmacy-input" id="splitCash" placeholder="0.00" step="0.01">
+                        <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 6px;">
+                            Split Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label-custom">Card</label>
                         <input type="number" class="pharmacy-input" id="splitCard" placeholder="0.00" step="0.01">
+                        <div style="margin-top: 6px;">
+                            <label class="form-label-custom" style="margin-bottom: 4px;">Card Ref No</label>
+                            <input type="text" class="pharmacy-input" id="splitCardRefNo" maxlength="30" placeholder="Ref No">
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label-custom">UPI</label>
                         <input type="number" class="pharmacy-input" id="splitUpi" placeholder="0.00" step="0.01" readonly>
-                    </div>
-                    <div class="col-12" style="margin-top: 4px;">
-                        <div style="font-size: 0.82rem; color: var(--gray-500);">
-                            Split Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
+                        <div style="margin-top: 6px;">
+                            <label class="form-label-custom" style="margin-bottom: 4px;">UPI Ref No</label>
+                            <input type="text" class="pharmacy-input" id="splitUpiRefNo" maxlength="30" placeholder="Ref No">
                         </div>
                     </div>
                 </div>

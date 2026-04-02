@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {}
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
         "projectName": "Rxnxt.Domain",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

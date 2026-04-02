@@ -344,7 +344,7 @@ body {
 .main-content {
     margin-left: var(--sidebar-width);
     flex: 1;
-    padding: 16px;
+    padding: 12px;
     transition: var(--transition);
     min-height: calc(100vh - var(--header-height));
 }
@@ -1136,11 +1136,11 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .payment-method-card {
-    padding: 5px;
+    padding: 3px;
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-md);
     cursor: pointer;
@@ -1162,7 +1162,7 @@ body {
 
 .payment-method-card i {
     font-size: 1.35rem;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     display: block;
 }
 
@@ -1179,11 +1179,11 @@ body {
 
 .payment-detail-form {
     display: none;
-    padding: 10px;
+    padding: 8px;
     background: var(--gray-50);
     border-radius: var(--radius-md);
     border: 1px solid var(--gray-200);
-    margin-top: 8px;
+    margin-top: 6px;
     animation: slideInUp 0.2s ease;
 }
 

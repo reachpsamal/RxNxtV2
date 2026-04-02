@@ -1094,15 +1094,10 @@ function recalculateBill() {
 
     const baseGrandTotal = Math.max(0, unroundedGrandTotal);
 
-    let displayGrandTotal = baseGrandTotal;
-    if (selectedPaymentMethod === 'Cash') {
-        const rounded = roundToNearestRupee(baseGrandTotal);
-        const roundOff = rounded - baseGrandTotal;
-        displayGrandTotal = rounded;
-        $('#billRoundOff').text(formatSignedCurrency(roundOff));
-    } else {
-        $('#billRoundOff').text(formatCurrency(0));
-    }
+    const rounded = roundToNearestRupee(baseGrandTotal);
+    const roundOff = rounded - baseGrandTotal;
+    const displayGrandTotal = rounded;
+    $('#billRoundOff').text(formatSignedCurrency(roundOff));
 
     $('#billSubtotal').text(formatCurrency(subTotal));
     $('#billTaxAmount').text(formatCurrency(taxTotal));
@@ -1235,7 +1230,8 @@ function syncSplitPayments(changedField, normalizeChangedField) {
         if (card > remainingAfterCash) card = remainingAfterCash;
     }
 
-    const upi = Math.max(0, grandTotal - cash - card);
+    const remaining = Math.max(0, grandTotal - cash - card);
+    const upi = remaining;
 
     // Avoid fighting the user's typing: only normalize the field they are editing on blur/change.
     if (normalizeChangedField) {
@@ -1249,7 +1245,7 @@ function syncSplitPayments(changedField, normalizeChangedField) {
     }
 
     $('#splitUpi').val(upi.toFixed(2));
-    $('#splitRemaining').text(formatCurrency(0));
+    $('#splitRemaining').text(formatCurrency(remaining));
 
     isSyncingSplit = false;
 }
@@ -1303,12 +1299,11 @@ function completeSale() {
         const cashReceived = parseFloat($('#cashAmount').val()) || 0;
         payments.push({ paymentMode: 'Cash', amount: grandTotal, reference: `Cash received: ${cashReceived}` });
     } else if (selectedPaymentMethod === 'Card') {
-        const last4 = $('#cardLast4').val().trim();
-        const cardType = $('#cardType').val();
-        payments.push({ paymentMode: 'Card', amount: grandTotal, reference: `${cardType} - ${last4}` });
+        const cardRefNo = ($('#cardRefNo').val() || '').trim();
+        payments.push({ paymentMode: 'Card', amount: grandTotal, reference: cardRefNo || null });
     } else if (selectedPaymentMethod === 'UPI') {
-        const upiId = $('#upiId').val().trim();
-        payments.push({ paymentMode: 'UPI', amount: grandTotal, reference: upiId });
+        const upiRefNo = ($('#upiRefNo').val() || '').trim();
+        payments.push({ paymentMode: 'UPI', amount: grandTotal, reference: upiRefNo || null });
     } else if (selectedPaymentMethod === 'Split') {
         const cash = parseFloat($('#splitCash').val()) || 0;
         const card = parseFloat($('#splitCard').val()) || 0;
@@ -1317,12 +1312,11 @@ function completeSale() {
             showToast('Split payment total does not match grand total', 'error');
             return;
         }
-        const cardType = $('#cardType').val();
-        const cardRef = $('#cardLast4').val().trim();
-        const upiRef = $('#upiId').val().trim();
+        const splitCardRefNo = ($('#splitCardRefNo').val() || '').trim();
+        const splitUpiRefNo = ($('#splitUpiRefNo').val() || '').trim();
 
-        const cardReference = cardRef ? `${cardType} - ${cardRef}` : (cardType || null);
-        const upiReference = upiRef || null;
+        const cardReference = splitCardRefNo || null;
+        const upiReference = splitUpiRefNo || null;
 
         if (cash > 0) payments.push({ paymentMode: 'Cash', amount: parseFloat(cash.toFixed(2)), reference: null });
         if (card > 0) payments.push({ paymentMode: 'Card', amount: parseFloat(card.toFixed(2)), reference: cardReference });
@@ -1394,7 +1388,8 @@ function startNewSale() {
     selectPaymentMethod('Cash');
     $('#cashAmount').val('');
     $('#changeAmount').text(formatCurrency(0));
-    $('#cardLast4, #upiId').val('');
+    $('#cardRefNo, #upiRefNo').val('');
+    $('#splitCardRefNo, #splitUpiRefNo').val('');
     $('#splitCash, #splitCard, #splitUpi').val('');
 
     $('#completeSaleBtn').prop('disabled', true).html('<i class="bi bi-check-circle"></i> Complete Sale');

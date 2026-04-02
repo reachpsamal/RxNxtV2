@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "9ezcvLMRBbc=",
+  "dgSpecHash": "9Xr7qZuNgpY=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\PharmacySalesApp.csproj",
+  "projectFilePath": "D:\\Rxnxtv2\\RxNxtV2\\PharmacySalesApp.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Hp\\.nuget\\packages\\azure.core\\1.25.0\\azure.core.1.25.0.nupkg.sha512",
     "C:\\Users\\Hp\\.nuget\\packages\\azure.identity\\1.7.0\\azure.identity.1.7.0.nupkg.sha512",

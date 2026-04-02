@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\Rxnxt.Web.csproj": {}
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\Rxnxt.Web.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj",
         "projectName": "Rxnxt.Business",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -32,8 +32,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj"
               }
             }
           }
@@ -82,14 +82,14 @@
         }
       }
     },
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
         "projectName": "Rxnxt.Domain",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -146,14 +146,14 @@
         }
       }
     },
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\Rxnxt.Logging.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
         "projectName": "Rxnxt.Logging",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -220,14 +220,14 @@
         }
       }
     },
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\Rxnxt.Services.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\Rxnxt.Services.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\Rxnxt.Services.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\Rxnxt.Services.csproj",
         "projectName": "Rxnxt.Services",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\Rxnxt.Services.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\Rxnxt.Services.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -248,11 +248,11 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj"
               },
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Domain\\Rxnxt.Domain.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Domain\\Rxnxt.Domain.csproj"
               }
             }
           }
@@ -297,14 +297,14 @@
         }
       }
     },
-    "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\Rxnxt.Web.csproj": {
+    "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\Rxnxt.Web.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\Rxnxt.Web.csproj",
+        "projectUniqueName": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\Rxnxt.Web.csproj",
         "projectName": "Rxnxt.Web",
-        "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\Rxnxt.Web.csproj",
+        "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\Rxnxt.Web.csproj",
         "packagesPath": "C:\\Users\\Hp\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\obj\\",
+        "outputPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -325,14 +325,14 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Business\\Rxnxt.Business.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Business\\Rxnxt.Business.csproj"
               },
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\Rxnxt.Logging.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Logging\\Rxnxt.Logging.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj"
               },
-              "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\Rxnxt.Services.csproj": {
-                "projectPath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Services\\Rxnxt.Services.csproj"
+              "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\Rxnxt.Services.csproj": {
+                "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Services\\Rxnxt.Services.csproj"
               }
             }
           }

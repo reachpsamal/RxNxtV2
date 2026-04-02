@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "iIwywR9VvI4=",
+  "dgSpecHash": "IWPGpQS4sDk=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Hp\\Desktop\\Backup\\PharmacySalesApp\\PharmacySalesApp\\Rxnxt.Web\\Rxnxt.Web.csproj",
+  "projectFilePath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\Rxnxt.Web.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Hp\\.nuget\\packages\\azure.core\\1.25.0\\azure.core.1.25.0.nupkg.sha512",
     "C:\\Users\\Hp\\.nuget\\packages\\azure.identity\\1.7.0\\azure.identity.1.7.0.nupkg.sha512",
