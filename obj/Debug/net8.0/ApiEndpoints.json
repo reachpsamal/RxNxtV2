@@ -1,0 +1,198 @@
+[
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "GetBatch",
+    "RelativePath": "api/Api/batches/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "AdvancedBatchSearch",
+    "RelativePath": "api/Api/batches/advanced-search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "batchNumber",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "medicineName",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "composition",
+        "Type": "System.String",
+        "IsRequired": false
+      },
+      {
+        "Name": "expiryFrom",
+        "Type": "System.Nullable\u00601[[System.DateTime, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+        "IsRequired": false
+      },
+      {
+        "Name": "expiryTo",
+        "Type": "System.Nullable\u00601[[System.DateTime, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "GetBatchesByMedicine",
+    "RelativePath": "api/Api/batches/by-medicine/{medicineId}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "medicineId",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "SearchBatches",
+    "RelativePath": "api/Api/batches/search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "q",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "CreateCustomer",
+    "RelativePath": "api/Api/customers",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "customer",
+        "Type": "PharmacySalesApp.Models.Customer",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "GetCustomer",
+    "RelativePath": "api/Api/customers/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "SearchCustomers",
+    "RelativePath": "api/Api/customers/search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "q",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "SearchMedicines",
+    "RelativePath": "api/Api/medicines/search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "q",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "GetSale",
+    "RelativePath": "api/Api/sales/{id}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "CompleteSale",
+    "RelativePath": "api/Api/sales/complete",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "PharmacySalesApp.Models.ViewModels.CompleteSaleRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "PharmacySalesApp.Controllers.ApiController",
+    "Method": "GetRecentSales",
+    "RelativePath": "api/Api/sales/recent",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "count",
+        "Type": "System.Int32",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  }
+]

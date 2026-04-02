@@ -1,0 +1,22 @@
+@model List<Rxnxt.Web.ViewModels.CustomerSearchItemViewModel>
+
+@if (Model == null || Model.Count == 0)
+{
+    <div class="autocomplete-no-results"><i class="bi bi-person-x"></i> No customer found. Try adding a new one.</div>
+}
+else
+{
+    foreach (var c in Model)
+    {
+        <div class="autocomplete-item" onclick="selectCustomer(@c.Id)">
+            <div class="item-name">@c.Name</div>
+            <div class="item-detail">
+                <i class="bi bi-telephone"></i> @c.Phone
+                @if (!string.IsNullOrWhiteSpace(c.Email))
+                {
+                    @: &middot; <i class="bi bi-envelope"></i> @c.Email
+                }
+            </div>
+        </div>
+    }
+}

@@ -1,0 +1,432 @@
+@model Rxnxt.Web.ViewModels.SaleViewModel
+
+@{
+    ViewData["Title"] = "New Sale";
+}
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<input type="hidden" id="serverSaleSuccessInvoice" value="@(TempData["SaleSuccessInvoice"] ?? string.Empty)">
+<input type="hidden" id="serverSaleError" value="@(TempData["SaleError"] ?? string.Empty)">
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+    <div class="success-content">
+        <div class="success-icon">
+            <i class="bi bi-check-lg"></i>
+        </div>
+        <h2 class="success-title">Sale Completed!</h2>
+        <p class="success-detail">
+            Your transaction has been processed successfully.
+            <span class="success-invoice" id="successInvoice"></span>
+        </p>
+        <button class="btn-primary-pharmacy" onclick="startNewSale()" style="width:100%; justify-content:center;">
+            <i class="bi bi-plus-circle"></i> Start New Sale
+        </button>
+    </div>
+</div>
+
+<div class="row g-3" id="salesPageLayout">
+    <!-- LEFT COLUMN -->
+    <div class="col-lg-8" id="salesLeftColumn">
+
+        <!-- ==================== MEDICINE SELECTION ==================== -->
+        <div class="section-card" id="medicineSection">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-capsule"></i>
+                    Medicine Selection
+                </div>
+                <span class="section-badge success" id="itemCount">0 items</span>
+            </div>
+            <div class="section-body">
+                <!-- Tabs -->
+                <div class="pharmacy-tabs">
+                    <button class="pharmacy-tab active" onclick="switchMedicineTab('batch')" id="tabBatch">
+                        <i class="bi bi-upc-scan"></i> Batch Number Sale
+                    </button>
+                    <button class="pharmacy-tab" onclick="switchMedicineTab('direct')" id="tabDirect">
+                        <i class="bi bi-search-heart"></i> Direct Medicine Sale
+                    </button>
+                    <button class="pharmacy-tab" onclick="switchMedicineTab('advanced')" id="tabAdvanced">
+                        <i class="bi bi-funnel"></i> Advanced Search
+                    </button>
+                </div>
+
+                <!-- TAB A: Batch Number Sale -->
+                <div class="tab-content-pharmacy active" id="tabContentBatch">
+                    <div class="input-group-pharmacy" style="position: relative;">
+                        <i class="bi bi-upc-scan input-icon"></i>
+                        <input type="text" class="pharmacy-input" id="batchSearch"
+                               placeholder="Enter or scan batch number..." autocomplete="off">
+                        <div class="autocomplete-dropdown" id="batchDropdown"></div>
+                    </div>
+                    <div class="batch-info-card" id="batchInfoCard">
+                        <!-- Dynamically filled -->
+                    </div>
+                </div>
+
+                <!-- TAB B: Direct Sale -->
+                <div class="tab-content-pharmacy" id="tabContentDirect">
+                    <div class="input-group-pharmacy" style="position: relative;">
+                        <i class="bi bi-search input-icon"></i>
+                        <input type="text" class="pharmacy-input" id="medicineSearch"
+                               placeholder="Search medicine by name, generic, or brand..." autocomplete="off">
+                        <div class="autocomplete-dropdown" id="medicineDropdown"></div>
+                    </div>
+                    <div class="batch-info-card" id="medicineBatchesCard">
+                        <!-- Dynamically filled -->
+                    </div>
+                </div>
+
+                <!-- TAB C: Advanced Batch Search -->
+                <div class="tab-content-pharmacy" id="tabContentAdvanced">
+                    <div class="batch-search-panel">
+                        <div class="search-filters">
+                            <div>
+                                <label class="form-label-custom">Batch Number</label>
+                                <input type="text" class="pharmacy-input" id="advBatchNumber" placeholder="Partial match...">
+                            </div>
+                            <div>
+                                <label class="form-label-custom">Medicine Name</label>
+                                <input type="text" class="pharmacy-input" id="advMedicineName" placeholder="Medicine name...">
+                            </div>
+                            <div>
+                                <label class="form-label-custom">Composition</label>
+                                <input type="text" class="pharmacy-input" id="advComposition" placeholder="Generic / composition...">
+                            </div>
+                            <div>
+                                <label class="form-label-custom">Expiry From</label>
+                                <input type="date" class="pharmacy-input" id="advExpiryFrom">
+                            </div>
+                            <div>
+                                <label class="form-label-custom">Expiry To</label>
+                                <input type="date" class="pharmacy-input" id="advExpiryTo">
+                            </div>
+                        </div>
+                        <button class="btn-primary-pharmacy" onclick="advancedSearch()">
+                            <i class="bi bi-search"></i> Search Batches
+                        </button>
+                        <div id="advancedSearchResults" style="margin-top: 16px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== SALE ITEMS GRID ==================== -->
+        <div class="section-card" id="saleItemsSection">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-cart3"></i>
+                    Sale Items
+                </div>
+                <button class="btn-ghost" onclick="clearAllItems()" id="clearCartBtn" style="display:none;">
+                    <i class="bi bi-trash3"></i> Clear All
+                </button>
+            </div>
+            <div class="section-body" style="padding: 0;">
+                <div class="sale-items-container">
+                    <div class="empty-cart" id="emptyCart">
+                        <i class="bi bi-cart-x"></i>
+                        <p>No items added yet</p>
+                        <span>Search and add medicines using the tabs above</span>
+                    </div>
+                    <table class="sale-items-table" id="saleItemsTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Product</th>
+                                <th>Batch</th>
+                                <th>Unit</th>
+                                <th>Qty</th>
+                                <th>M R P</th>
+                                <th>Disc %</th>
+                                <th>Disc ₹</th>
+                                <th>Tax</th>
+                                <th class="text-right">Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="saleItemsBody">
+                        </tbody>
+                    </table>
+
+                    <div class="sale-items-summary" id="saleItemsSummary" style="display:none;">
+                        <div class="sale-items-summary-row sale-items-summary-row-compact sale-items-summary-header-row">
+                            <div class="sale-items-summary-label">No. of Items</div>
+                            <div class="sale-items-summary-label">Taxable Amt</div>
+                            <div class="sale-items-summary-label">Discount Amt</div>
+                            <div class="sale-items-summary-label">Tax Amt</div>
+                            <div class="sale-items-summary-label">Payable Amt</div>
+                        </div>
+                        <div class="sale-items-summary-row sale-items-summary-row-compact sale-items-summary-values-row">
+                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryItems" value="0" readonly>
+                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryMrp" value="₹ 0.00" readonly>
+                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryDiscountAmt" value="₹ 0.00" readonly>
+                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryTax" value="₹ 0.00" readonly>
+                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryPayable" value="₹ 0.00" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card" id="taxBreakupSection">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-percent"></i>
+                    Tax Breakup
+                </div>
+            </div>
+            <div class="section-body">
+                <div class="tax-breakup-table">
+                    <div class="tax-breakup-row">
+                        <div class="tax-breakup-cell tax-breakup-label">GST</div>
+                        <div class="tax-breakup-cell">5%</div>
+                        <div class="tax-breakup-cell">12%</div>
+                        <div class="tax-breakup-cell">18%</div>
+                    </div>
+                    <div class="tax-breakup-row">
+                        <div class="tax-breakup-cell tax-breakup-label">CGST</div>
+                        <div class="tax-breakup-cell" id="cgstAmt5">₹ 0.00</div>
+                        <div class="tax-breakup-cell" id="cgstAmt12">₹ 0.00</div>
+                        <div class="tax-breakup-cell" id="cgstAmt18">₹ 0.00</div>
+                    </div>
+                    <div class="tax-breakup-row">
+                        <div class="tax-breakup-cell tax-breakup-label">SGST</div>
+                        <div class="tax-breakup-cell" id="sgstAmt5">₹ 0.00</div>
+                        <div class="tax-breakup-cell" id="sgstAmt12">₹ 0.00</div>
+                        <div class="tax-breakup-cell" id="sgstAmt18">₹ 0.00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col-lg-4" id="salesRightColumn">
+        <!-- ==================== CUSTOMER SECTION ==================== -->
+        <div class="section-card" id="customerSection">
+            <div class="section-body">
+                <!-- Customer Search + Add -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="input-group-pharmacy" style="position: relative; flex: 1;">
+                        <i class="bi bi-search input-icon"></i>
+                        <input type="text" class="pharmacy-input" id="customerSearch"
+                               placeholder="Search by name or phone..." autocomplete="off">
+                        <button class="input-clear" id="customerSearchClear" onclick="clearCustomerSearch()">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                        <div class="autocomplete-dropdown" id="customerDropdown"></div>
+                    </div>
+                    <button class="btn-ghost" id="toggleNewCustomerForm" onclick="openNewCustomerFromSearch()" title="Add New Customer" style="padding: 10px 12px; height: 42px; display: inline-flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Selected Customer Card -->
+                <div id="selectedCustomerCard" style="display: none; margin-top: 8px;"></div>
+
+                <div style="margin-top: 4px; display: flex; justify-content: flex-end; align-items: center;">
+                    <button class="btn-ghost" id="skipCustomerBtn" onclick="skipCustomer()" style="color: var(--gray-400); font-size: 0.78rem; padding: 6px 10px;">
+                        Skip (Walk-in)
+                    </button>
+                </div>
+
+                <!-- Inline New Customer Form -->
+                <div class="inline-form" id="newCustomerForm">
+                    <div class="inline-form-header">
+                        <div class="inline-form-title">
+                            <i class="bi bi-person-plus-fill"></i> New Customer
+                        </div>
+                        <button class="btn-ghost" onclick="toggleNewCustomerForm()">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label-custom">Name <span style="color:var(--danger-500)">*</span></label>
+                            <input type="text" class="pharmacy-input" id="newCustName" placeholder="Full name">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-custom">Phone <span style="color:var(--danger-500)">*</span></label>
+                            <input type="text" class="pharmacy-input" id="newCustPhone" placeholder="10-digit number" maxlength="15">
+                        </div>
+                        <div class="col-12" style="margin-top: 8px;">
+                            <button class="btn-primary-pharmacy" onclick="saveNewCustomer()">
+                                <i class="bi bi-check-lg"></i> Save Customer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bill Summary -->
+        <div class="bill-summary" id="billSummary">
+            <div class="bill-summary-title">
+                <i class="bi bi-receipt-cutoff"></i> Bill Settlement
+            </div>
+
+            <div class="bill-row">
+                <span class="label">Taxable Amt</span>
+                <span class="value" id="billSubtotal">₹ 0.00</span>
+            </div>
+            <div class="bill-row">
+                <span class="label">Tax Amt</span>
+                <span class="value" id="billTaxAmount">₹ 0.00</span>
+            </div>
+            <div class="bill-row discount">
+                <span class="label">Item Discount</span>
+                <span class="value" id="billItemDiscount">- ₹ 0.00</span>
+            </div>
+            <hr class="bill-divider">
+            <div class="bill-row">
+                <span class="label">Additional Discount</span>
+                <span class="value">
+                    % <input type="number" class="additional-discount-input" id="additionalDiscountPercent" value="0" min="0" max="100" step="0.5">
+                    ₹ <input type="number" class="additional-discount-input" id="additionalDiscount" value="0" min="0" step="0.01" readonly>
+                </span>
+            </div>
+            <div class="bill-row" id="billRoundOffRow">
+                <span class="label">Round-off</span>
+                <span class="value" id="billRoundOff">₹ 0.00</span>
+            </div>
+            <hr class="bill-divider">
+            <div class="bill-row grand-total">
+                <span class="label">Grand Total</span>
+                <span class="value" id="billGrandTotal">₹ 0.00</span>
+            </div>
+
+            <hr class="bill-divider">
+
+            <label class="form-label-custom" style="margin-bottom: 10px;">Select Payment Method</label>
+            <div class="payment-methods">
+                <div class="payment-method-card cash-card selected" onclick="selectPaymentMethod('Cash')" id="pmCash">
+                    <i class="bi bi-cash-stack"></i>
+                    <div class="method-name">Cash</div>
+                </div>
+                <div class="payment-method-card card-card" onclick="selectPaymentMethod('Card')" id="pmCard">
+                    <i class="bi bi-credit-card"></i>
+                    <div class="method-name">Card</div>
+                </div>
+                <div class="payment-method-card upi-card" onclick="selectPaymentMethod('UPI')" id="pmUpi">
+                    <i class="bi bi-phone"></i>
+                    <div class="method-name">UPI</div>
+                </div>
+                <div class="payment-method-card split-card" onclick="selectPaymentMethod('Split')" id="pmSplit">
+                    <i class="bi bi-pie-chart"></i>
+                    <div class="method-name">Split</div>
+                </div>
+            </div>
+
+            <!-- Cash Payment -->
+            <div class="payment-detail-form show" id="paymentCash">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Amount Received</label>
+                        <input type="number" class="pharmacy-input" id="cashAmount" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Change</label>
+                        <div style="padding: 10px 14px; background: var(--accent-50); border-radius: var(--radius-md); font-weight: 700; color: var(--accent-700); font-size: 1.1rem;" id="changeAmount">₹ 0.00</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Ref no</label>
+                        <input type="text" class="pharmacy-input" id="cashRefNo" maxlength="30" placeholder="Ref No">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Payment -->
+            <div class="payment-detail-form" id="paymentCard">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Card Type</label>
+                        <select class="pharmacy-input" id="cardType">
+                            <option>Visa</option>
+                            <option>MasterCard</option>
+                            <option>RuPay</option>
+                            <option>Amex</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Reference No</label>
+                        <input type="text" class="pharmacy-input" id="cardLast4" maxlength="30" placeholder="Ref No">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Amount</label>
+                        <input type="number" class="pharmacy-input" id="cardAmount" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- UPI Payment -->
+            <div class="payment-detail-form" id="paymentUPI">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Select UPI</label>
+                        <select class="pharmacy-input" id="upiType">
+                            <option>GPay</option>
+                            <option>PhonePe</option>
+                            <option>Paytm</option>
+                            <option>BHIM</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Reference No</label>
+                        <input type="text" class="pharmacy-input" id="upiId" maxlength="30" placeholder="Ref No">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Amount</label>
+                        <input type="number" class="pharmacy-input" id="upiAmount" placeholder="0.00" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Split Payment -->
+            <div class="payment-detail-form" id="paymentSplit">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Cash</label>
+                        <input type="number" class="pharmacy-input" id="splitCash" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Card</label>
+                        <input type="number" class="pharmacy-input" id="splitCard" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">UPI</label>
+                        <input type="number" class="pharmacy-input" id="splitUpi" placeholder="0.00" step="0.01" readonly>
+                    </div>
+                    <div class="col-12" style="margin-top: 4px;">
+                        <div style="font-size: 0.82rem; color: var(--gray-500);">
+                            Split Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bill-summary-actions" style="margin-top: 12px; display: flex; gap: 10px;">
+                <form id="completeSaleForm" method="post" asp-controller="Sales" asp-action="CompleteSale" style="flex: 1; margin: 0;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="SaleJson" id="saleJson" value="" />
+                    <button type="button" class="btn-success-pharmacy" id="completeSaleBtn" onclick="completeSale()" disabled style="flex: 1; width: 100%;">
+                        <i class="bi bi-check-circle"></i> Complete Sale
+                    </button>
+                </form>
+
+                <button class="btn-ghost" id="resetSaleBtn" style="color: var(--gray-400); flex: 1;" onclick="startNewSale()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset Sale
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/pharmacy-sales.js"></script>
+}

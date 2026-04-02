@@ -1,0 +1,16 @@
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\bin\Debug\net8.0\Rxnxt.Business.deps.json
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\bin\Debug\net8.0\Rxnxt.Business.dll
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\bin\Debug\net8.0\Rxnxt.Business.pdb
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\bin\Debug\net8.0\Rxnxt.Domain.dll
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\bin\Debug\net8.0\Rxnxt.Domain.pdb
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.csproj.AssemblyReference.cache
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.AssemblyInfoInputs.cache
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.AssemblyInfo.cs
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.csproj.CoreCompileInputs.cache
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.sourcelink.json
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Bu.9B5DF756.Up2Date
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.dll
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\refint\Rxnxt.Business.dll
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\Rxnxt.Business.pdb
+C:\Users\Hp\Desktop\Backup\PharmacySalesApp\PharmacySalesApp\Rxnxt.Business\obj\Debug\net8.0\ref\Rxnxt.Business.dll

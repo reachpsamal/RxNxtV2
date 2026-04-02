@@ -1,0 +1,147 @@
+    ViewData["Title"] = "Demo Data Test";
+}
+
+<div class="container mt-4">
+    <h2>Demo Data Test</h2>
+    <p>This page helps test the demo data functionality for the pharmacy sales system.</p>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Customer Search</h5>
+                </div>
+                <div class="card-body">
+                    <p>Try searching for these demo customers:</p>
+                    <ul>
+                        <li>Rahul Sharma (9876543210)</li>
+                        <li>Debasis singh (8456919551)</li>
+                        <li>Rakesh Kumar (9556090334)</li>
+                        <li>Subrat Pradhan (8895613251)</li>
+                        <li>Binod Das (8280729150)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Medicine Search</h5>
+                </div>
+                <div class="card-body">
+                    <p>Try searching for these demo medicines:</p>
+                    <ul>
+                        <li>Paracetamol 500mg</li>
+                        <li>Azithromycin 250mg</li>
+                        <li>Amoxicillin 500mg</li>
+                        <li>Ibuprofen 400mg</li>
+                        <li>Omeprazole 20mg</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Batch Search</h5>
+                </div>
+                <div class="card-body">
+                    <p>Try searching for these demo batches:</p>
+                    <ul>
+                        <li>PAR2024001 (Paracetamol)</li>
+                        <li>AZI2024001 (Azithromycin)</li>
+                        <li>AMX2024001 (Amoxicillin)</li>
+                        <li>IBU2024001 (Ibuprofen)</li>
+                        <li>MET2024001 (Metformin)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Sample Sale Workflow</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Test a complete sale transaction:</h6>
+                    <ol>
+                        <li><strong>Add Customer:</strong> Search for "Rahul Sharma" and select him</li>
+                        <li><strong>Add Medicine:</strong> Search for "Paracetamol" and select batch "PAR2024001"</li>
+                        <li><strong>Set Quantity:</strong> Add 2 strips of Paracetamol</li>
+                        <li><strong>Add Another Item:</strong> Search for "Ibuprofen" and select batch "IBU2024001"</li>
+                        <li><strong>Set Quantity:</strong> Add 1 strip of Ibuprofen</li>
+                        <li><strong>Apply Discount:</strong> Add 5% discount on Paracetamol</li>
+                        <li><strong>Choose Payment:</strong> Select Cash payment method</li>
+                        <li><strong>Complete Sale:</strong> Click "Complete Sale" button</li>
+                    </ol>
+                    
+                    <div class="alert alert-info mt-3">
+                        <strong>Expected Result:</strong> The sale should process successfully and show a success overlay with an invoice number.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Demo Data Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-primary">5</h3>
+                                <p>Customers</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-success">10</h3>
+                                <p>Medicines</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-warning">14</h3>
+                                <p>Batches</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <h3 class="text-info">6</h3>
+                                <p>Categories</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="text-center mt-4">
+        <a href="/Sales" class="btn btn-primary btn-lg">
+            <i class="bi bi-cart-plus"></i> Go to Sales Page
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Quick test functions
+        function testCustomerSearch() {
+            window.open('/Sales', '_blank');
+            setTimeout(() => {
+                // This would need to be implemented in the actual sales page
+                console.log('Test customer search functionality');
+            }, 1000);
+        }
+    </script>
+}

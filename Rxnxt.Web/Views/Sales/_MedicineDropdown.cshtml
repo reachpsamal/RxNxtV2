@@ -1,0 +1,18 @@
+@model List<Rxnxt.Web.ViewModels.StockSearchItemViewModel>
+
+@if (Model == null || Model.Count == 0)
+{
+    <div class="autocomplete-no-results"><i class="bi bi-capsule"></i> No medicine found</div>
+}
+else
+{
+    foreach (var m in Model)
+    {
+        <div class="autocomplete-item" onclick="addFromDirectSelection('@m.ProductId', '@m.BatchNumber')">
+            <div class="item-name">@m.ProductName</div>
+            <div class="item-detail">
+                @(string.IsNullOrWhiteSpace(m.Manufacturer) ? "" : m.Manufacturer + " · ")Batch: <strong>@m.BatchNumber</strong> &middot; Stock: @m.AvailableQty @m.UomName
+            </div>
+        </div>
+    }
+}

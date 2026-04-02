@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - PharmaCare POS</title>
+    <meta name="description" content="PharmaCare - Professional Pharmacy Sales Management System" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="~/css/pharmacy.css" />
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="pharmacy-header" id="mainHeader">
+        <div class="header-content">
+            <div class="header-left">
+                <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="brand">
+                    <div class="brand-icon">
+                        <i class="bi bi-capsule"></i>
+                    </div>
+                    <div class="brand-text">
+                        <h1>PharmaCare</h1>
+                        <span>Sales Management</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-center">
+                <div class="header-datetime" id="headerDateTime">
+                    <i class="bi bi-clock"></i>
+                    <span id="currentDateTime"></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="header-stat">
+                    <i class="bi bi-receipt"></i>
+                    <span>Today's Sales</span>
+                </div>
+                <div class="user-avatar" title="Pharmacist">
+                    <i class="bi bi-person-circle"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <nav class="sidebar-nav">
+                <a href="@Url.Action("Index", "Sales")" class="nav-item active" title="New Sale">
+                    <i class="bi bi-cart-plus"></i>
+                    <span>New Sale</span>
+                </a>
+                <a href="#" class="nav-item" title="Sales History">
+                    <i class="bi bi-clock-history"></i>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item" title="Inventory">
+                    <i class="bi bi-box-seam"></i>
+                    <span>Inventory</span>
+                </a>
+                <a href="#" class="nav-item" title="Customers">
+                    <i class="bi bi-people"></i>
+                    <span>Customers</span>
+                </a>
+                <a href="#" class="nav-item" title="Reports">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="#" class="nav-item" title="Settings">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-version">v1.0</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- DateTime updater -->
+    <script>
+        function updateDateTime() {
+            const now = new Date();
+            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            document.getElementById('currentDateTime').textContent = now.toLocaleDateString('en-IN', options);
+        }
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+
+        // Sidebar toggle
+        document.getElementById('sidebarToggle').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            document.getElementById('mainContent').classList.toggle('expanded');
+        });
+    </script>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>

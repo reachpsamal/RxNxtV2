@@ -1,0 +1,23 @@
+@model List<Rxnxt.Web.ViewModels.StockSearchItemViewModel>
+
+@if (Model == null || Model.Count == 0)
+{
+    <div class="autocomplete-no-results"><i class="bi bi-box"></i> No batch found</div>
+}
+else
+{
+    foreach (var b in Model)
+    {
+        var expiryClass = b.IsExpired ? "badge-expired" : (b.IsNearExpiry ? "badge-expiry-warning" : "badge-stock");
+        var expiryText = b.IsExpired ? "EXPIRED" : (b.IsNearExpiry ? "Near Expiry" : "Valid");
+        <div class="autocomplete-item" data-product-id="@b.ProductId" data-batch-number="@b.BatchNumber" onclick="addFromBatchSelection('@b.ProductId', '@b.BatchNumber')">
+            <div class="item-name">@b.ProductName</div>
+            <div class="item-detail">
+                Batch: <strong>@b.BatchNumber</strong> &middot;
+                Exp: @(b.ExpiryDate?.ToString("dd-MMM-yyyy") ?? "-")
+                <span class="item-badge @expiryClass">@expiryText</span> &middot;
+                Stock: @b.AvailableQty @b.UomName
+            </div>
+        </div>
+    }
+}

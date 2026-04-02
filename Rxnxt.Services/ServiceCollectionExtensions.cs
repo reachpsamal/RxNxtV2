@@ -1,0 +1,14 @@
+using Microsoft.Extensions.DependencyInjection;
+using Rxnxt.Services.Implementations;
+
+namespace Rxnxt.Services;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddRxnxtServices(this IServiceCollection services)
+    {
+        services.AddScoped<CustomerService>();
+        services.AddScoped<SaleService>();
+        return services;
+    }
+}
