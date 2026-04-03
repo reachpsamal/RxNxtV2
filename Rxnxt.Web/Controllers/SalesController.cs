@@ -21,9 +21,14 @@ namespace Rxnxt.Web.Controllers
             _stockService = stockService;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index(CancellationToken cancellationToken)
         {
-            return View();
+            var stocks = await _stockService.GetStocksAsync(cancellationToken);
+            var vm = new SaleViewModel
+            {
+                PrefetchedStocks = stocks.Select(StockSearchItemViewModel.FromDto).ToList()
+            };
+            return View(vm);
         }
 
         [HttpGet]

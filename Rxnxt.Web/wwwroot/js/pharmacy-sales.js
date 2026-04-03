@@ -7,6 +7,7 @@ let selectedCustomer = null;
 let saleItems = [];
 let selectedPaymentMethod = 'Cash';
 let currentBatchInfo = null;
+let selectedUnitType = 'PCS';
 let debounceTimer = null;
 let suppressBatchAutoSelectUntil = 0;
 let isSyncingSplit = false;
@@ -16,6 +17,28 @@ let inFlightBatchAdds = new Map();
 const MVC_BASE = '/Sales';
 
 const FIXED_TAX_PERCENT = 5;
+
+const PREFETCH_STOCKS = Array.isArray(window.__prefetchStocks) ? window.__prefetchStocks : [];
+
+function safeNotify(msg) {
+    try {
+        if (typeof showToast === 'function') {
+            showToast(msg, 'error');
+            return;
+        }
+    } catch { }
+    try { console.error(msg); } catch { }
+}
+
+window.addEventListener('error', function (e) {
+    const message = e?.error?.message || e?.message || 'Unknown JS error';
+    safeNotify(message);
+});
+
+window.addEventListener('unhandledrejection', function (e) {
+    const message = e?.reason?.message || String(e?.reason || 'Unhandled promise rejection');
+    safeNotify(message);
+});
 
 // ============ UTILITIES ============
 function formatCurrency(amount) {
@@ -327,336 +350,81 @@ function addFromDirectSelection(productId, batchNumber) {
 
 // ============ BATCH SEARCH (TAB A) ============
 function fetchBatchSearchResults(q, onDone) {
-    fetch(`${MVC_BASE}/SearchBatch?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.text())
-        .then(html => {
-            const dropdown = $('#batchDropdown');
-            dropdown.html(html);
-            dropdown.addClass('show');
-
-            const items = [];
-            dropdown.find('.autocomplete-item[data-product-id]').each(function () {
-                const pid = $(this).attr('data-product-id');
-                const bn = $(this).attr('data-batch-number');
-                if (pid && bn !== undefined) items.push({ productId: pid, batchNumber: bn });
-            });
-            onDone(items);
-        })
-        .catch(() => {
-            $('#batchDropdown').removeClass('show').empty();
-            onDone([]);
-        });
-}
-
-function renderBatchDropdown(data) {
-    // HTML is rendered server-side via partial view
-}
-
-function addFromBatchSelection(productId, batchNumber) {
-    suppressBatchAutoSelectUntil = Date.now() + 800;
-    const key = `${productId}|${String(batchNumber || '').trim().toLowerCase()}`;
-    const now = Date.now();
-    if (lastBatchQuickAdd.key === key && (now - lastBatchQuickAdd.at) < 800) {
+    const query = (q || '').trim();
+    if (query.length < 2) {
+        $('#batchDropdown').removeClass('show').empty();
+        onDone([]);
         return;
     }
-    lastBatchQuickAdd = { key, at: now };
 
-    addFromAdvancedSearch(productId, batchNumber);
-    $('#batchDropdown').removeClass('show').empty();
-    $('#batchInfoCard').removeClass('show').empty();
-    $('#batchSearch').val('').focus();
-}
+    const results = PREFETCH_STOCKS
+        .filter(s => (s?.batchNumber || '').toString().toLowerCase().includes(query.toLowerCase()))
+        .sort((a, b) => String(a?.batchNumber || '').localeCompare(String(b?.batchNumber || ''), 'en', { sensitivity: 'base' }))
+        .slice(0, 20);
 
-function tryAutoSelectBatchFromSearch(q) {
-    const query = (q || '').trim();
-    if (query.length < 2) return;
-
-    fetchBatchSearchResults(query, function (data) {
-        if (!data || data.length === 0) {
-            renderBatchDropdown([]);
-            return;
-        }
-
-        const exact = data.find(b => (b.batchNumber || '').toLowerCase() === query.toLowerCase());
-        if (exact) {
-            $('#batchDropdown').removeClass('show').empty();
-            addFromBatchSelection(exact.productId, exact.batchNumber);
-            return;
-        }
-
-        // If the query is a prefix of a single batchNumber (common while typing/scanning), auto-select it
-        const prefixMatches = data.filter(b => (b.batchNumber || '').toLowerCase().startsWith(query.toLowerCase()));
-        if (prefixMatches.length === 1) {
-            $('#batchDropdown').removeClass('show').empty();
-            addFromBatchSelection(prefixMatches[0].productId, prefixMatches[0].batchNumber);
-            return;
-        }
-
-        if (data.length === 1) {
-            $('#batchDropdown').removeClass('show').empty();
-            addFromBatchSelection(data[0].productId, data[0].batchNumber);
-            return;
-        }
-
-        // Multiple results; show dropdown so user can pick
-        renderBatchDropdown(data);
-    });
+    renderBatchDropdown(results);
+    onDone(results.map(r => ({ productId: r.productId, batchNumber: r.batchNumber })));
 }
 
 $('#batchSearch').on('input', debounce(function () {
     const q = $(this).val().trim();
-    if (q.length < 2) {
-        $('#batchDropdown').removeClass('show').empty();
-        return;
-    }
-    // If it looks like a full batch number, try to auto-select immediately (more reliable than relying on Enter)
-    if (q.length >= 8) {
-        tryAutoSelectBatchFromSearch(q);
-        return;
-    }
-
-    fetchBatchSearchResults(q, function (data) {
-        renderBatchDropdown(data);
-    });
+    fetchBatchSearchResults(q, function () { });
 }));
 
-// Allow typing/scanning a batch number and pressing Enter to immediately show details
-$('#batchSearch').on('keydown', function (e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        if (Date.now() < suppressBatchAutoSelectUntil) return;
-        const q = $(this).val().trim();
-        tryAutoSelectBatchFromSearch(q);
-    }
-});
-
-// Some barcode scanners trigger keypress (or only reliably populate value before keypress)
-$('#batchSearch').on('keypress', function (e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        if (Date.now() < suppressBatchAutoSelectUntil) return;
-        const q = $(this).val().trim();
-        tryAutoSelectBatchFromSearch(q);
-    }
-});
-
-// Fallback: if user/scanner fills the input and focus moves away, still try to load details
-$('#batchSearch').on('change blur', function () {
-    const q = $(this).val().trim();
-    if (q.length >= 2) {
-        if (Date.now() < suppressBatchAutoSelectUntil) return;
-        tryAutoSelectBatchFromSearch(q);
-    }
-});
-
-function selectStock(productId, batchNumber, source) {
-    fetch(`${MVC_BASE}/GetStockByProductBatch?productId=${encodeURIComponent(productId)}&batchNumber=${encodeURIComponent(batchNumber)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => {
-            if (!r.ok) throw new Error('not found');
-            return r.text();
-        })
-        .then(html => {
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            const payload = temp.querySelector('.stock-details-payload');
-            const json = payload?.getAttribute('data-stock-json');
-            if (!json) throw new Error('payload missing');
-            const b = normalizeStockPayload(JSON.parse(json));
-            if (!b) throw new Error('payload invalid');
-
-            currentBatchInfo = b;
-
-            const expiryStr = formatExpiryDate(b.expiryDate) || '-';
-            const expDate = b.expiryDate ? new Date(b.expiryDate) : null;
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const isExpired = !!(expDate && !Number.isNaN(expDate.getTime()) && expDate < today);
-            const nearLimit = new Date(today);
-            nearLimit.setDate(nearLimit.getDate() + 90);
-            const isNearExpiry = !!(expDate && !Number.isNaN(expDate.getTime()) && !isExpired && expDate <= nearLimit);
-            const expiryClass = isExpired ? 'danger' : (isNearExpiry ? 'warning' : '');
-            const expiryWarning = isExpired ? '<span style="color:var(--danger-500);font-weight:600;font-size:0.78rem;">⚠ EXPIRED</span>' :
-                (isNearExpiry ? '<span style="color:var(--warning-500);font-weight:600;font-size:0.78rem;">⚠ Near Expiry</span>' : '');
-
-            const fixedUnit = readStockUom(b);
-            selectedUnitType = fixedUnit;
-
-            const availableQty = readStockQty(b);
-            const productName = readStockProductName(b);
-            const batchNo = readStockBatchNumber(b);
-
-            currentBatchInfo.availableQty = availableQty;
-            currentBatchInfo.uomName = fixedUnit;
-            currentBatchInfo.productName = productName;
-            currentBatchInfo.batchNumber = batchNo;
-
-            const targetCard = source === 'batch' ? '#batchInfoCard' : '#medicineBatchesCard';
-            $(targetCard).html(`
-                <div class="batch-info-grid">
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Product</div>
-                        <div class="batch-info-value">${productName}</div>
-                    </div>
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Batch Number</div>
-                        <div class="batch-info-value">${batchNo}</div>
-                    </div>
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Expiry Date</div>
-                        <div class="batch-info-value ${expiryClass}">${expiryStr} ${expiryWarning}</div>
-                    </div>
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Available</div>
-                        <div class="batch-info-value">${availableQty} ${fixedUnit}</div>
-                    </div>
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Unit Price</div>
-                        <div class="batch-info-value">${formatCurrency(readStockMrp(b))}</div>
-                    </div>
-                    <div class="batch-info-item">
-                        <div class="batch-info-label">Manufacturer</div>
-                        <div class="batch-info-value">${b.manufacturer || 'N/A'}</div>
-                    </div>
-                </div>
-                <div class="batch-actions">
-                    <div>
-                        <label class="form-label-custom">Unit Type</label>
-                        <div class="unit-toggle" id="unitToggle">
-                            <button class="active" disabled>${fixedUnit}</button>
-                        </div>
-                    </div>
-                    <div style="flex:1;">
-                        <label class="form-label-custom">Quantity</label>
-                        <input type="number" class="pharmacy-input" id="addQty" value="1" min="1" max="${availableQty}" style="width:100px;">
-                    </div>
-                    <div>
-                        <label class="form-label-custom">&nbsp;</label>
-                        <button class="btn-outline-pharmacy" onclick="cancelBatchSelection('${source}')" style="margin-right:8px;">
-                            <i class="bi bi-x-circle"></i> Cancel
-                        </button>
-                        <button class="btn-primary-pharmacy" onclick="addToCart()">
-                            <i class="bi bi-cart-plus"></i> Add
-                        </button>
-                    </div>
-                </div>
-            `).addClass('show');
-
-            const el = document.querySelector(targetCard);
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-
-            $('#batchDropdown, #medicineDropdown').removeClass('show');
-        })
-        .catch(() => {
-            showToast('Failed to load stock', 'error');
-        });
-}
-
-function cancelBatchSelection(source) {
-    suppressBatchAutoSelectUntil = Date.now() + 800;
-    currentBatchInfo = null;
-    selectedUnitType = 'PCS';
-
-    if (source === 'batch') {
-        $('#batchInfoCard').removeClass('show').empty();
-        $('#batchDropdown').removeClass('show').empty();
-        $('#batchSearch').val('').focus();
-    } else {
-        $('#medicineBatchesCard').removeClass('show').empty();
-        $('#medicineDropdown').removeClass('show').empty();
-        $('#medicineSearch').focus();
-    }
-}
-
-function getSubTotal() {
-    let subTotal = 0;
-    saleItems.forEach(item => {
-        subTotal += item.price * item.quantity;
-    });
-    return subTotal;
-}
-
-function getTaxTotal() {
-    let taxTotal = 0;
-    saleItems.forEach(item => {
-        taxTotal += item.taxAmount || 0;
-    });
-    return taxTotal;
-}
-
-function updateSaleItemsSummary() {
-    if (!saleItems.length) {
-        $('#saleItemsSummary').hide();
+function renderBatchDropdown(data) {
+    const dropdown = $('#batchDropdown');
+    const items = Array.isArray(data) ? data : [];
+    if (!items.length) {
+        dropdown
+            .html('<div class="autocomplete-no-results"><i class="bi bi-box"></i> No batch found</div>')
+            .addClass('show');
         return;
     }
-    const subTotal = getSubTotal();
 
-    let itemDiscount = 0;
-    saleItems.forEach(item => {
-        itemDiscount += item.discountAmount || 0;
-    });
-    const taxTotal = getTaxTotal();
-    const payable = Math.max(0, subTotal - itemDiscount + taxTotal);
+    const html = items.map(b => {
+        const isExpired = !!b.isExpired;
+        const isNearExpiry = !!b.isNearExpiry;
+        const expiryClass = isExpired ? 'badge-expired' : (isNearExpiry ? 'badge-expiry-warning' : 'badge-stock');
+        const expiryText = isExpired ? 'EXPIRED' : (isNearExpiry ? 'Near Expiry' : 'Valid');
+        const exp = b.expiryDate ? new Date(b.expiryDate) : null;
+        const expTxt = exp && !Number.isNaN(exp.getTime())
+            ? exp.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '-';
 
-    $('#saleSummaryItems').val(`${saleItems.length}`);
-    $('#saleSummaryMrp').val(formatCurrency(subTotal));
-    $('#saleSummaryDiscountAmt').val(formatCurrency(itemDiscount));
-    $('#saleSummaryTax').val(formatCurrency(taxTotal));
-    $('#saleSummaryPayable').val(formatCurrency(payable));
+        return `
+            <div class="autocomplete-item" data-product-id="${b.productId}" data-batch-number="${String(b.batchNumber || '')}" onclick="addFromBatchSelection('${b.productId}', '${String(b.batchNumber || '').replace(/'/g, "\\'")}')">
+                <div class="item-name">${String(b.productName || '')}</div>
+                <div class="item-detail">
+                    Batch: <strong>${String(b.batchNumber || '')}</strong> &middot;
+                    Exp: ${expTxt}
+                    <span class="item-badge ${expiryClass}">${expiryText}</span> &middot;
+                    Stock: ${formatNumber(b.availableQty)} ${String(b.uomName || '')}
+                </div>
+            </div>
+        `;
+    }).join('');
 
-    $('#saleItemsSummary').show();
+    dropdown.html(html).addClass('show');
 }
 
-let isSyncingAdditionalDiscount = false;
-
-function getAdditionalDiscountBaseAmount() {
-    const subTotal = getSubTotal();
-    let itemDiscount = 0;
-    saleItems.forEach(item => {
-        itemDiscount += item.discountAmount || 0;
-    });
-    return Math.max(0, subTotal - itemDiscount);
+function formatNumber(n) {
+    const v = parseFloat(n);
+    return Number.isFinite(v) ? (Number.isInteger(v) ? String(v) : String(v)) : '0';
 }
 
-function getAdditionalDiscountAmount() {
-    const base = getAdditionalDiscountBaseAmount();
-    let percent = parseFloat($('#additionalDiscountPercent').val()) || 0;
-    percent = Math.min(100, Math.max(0, percent));
-    return base * percent / 100;
+function findPrefetchedStock(productId, batchNumber) {
+    const pid = String(productId || '').trim().toLowerCase();
+    const bn = String(batchNumber || '').trim().toLowerCase();
+    if (!pid || !bn) return null;
+    return PREFETCH_STOCKS.find(s => String(s?.productId || '').trim().toLowerCase() === pid && String(s?.batchNumber || '').trim().toLowerCase() === bn) || null;
 }
 
-function syncAdditionalDiscountAmountFromPercent() {
-    if (isSyncingAdditionalDiscount) return;
-    isSyncingAdditionalDiscount = true;
-    try {
-        const base = getAdditionalDiscountBaseAmount();
-        let percent = parseFloat($('#additionalDiscountPercent').val()) || 0;
-        percent = Math.min(100, Math.max(0, percent));
-        const amount = base * percent / 100;
-        $('#additionalDiscountPercent').val(percent);
-        $('#additionalDiscount').val(amount.toFixed(2));
-    } finally {
-        isSyncingAdditionalDiscount = false;
-    }
-}
-
-$('#additionalDiscountPercent').on('input change', function () {
-    syncAdditionalDiscountAmountFromPercent();
-    recalculateBill();
-    updateSaleItemsSummary();
-});
-
-let selectedUnitType = 'PCS';
-
-function setUnitType(type) {
-    selectedUnitType = type;
-    $('#unitToggle button').removeClass('active');
-    $(`#unitToggle button:contains('${type}')`).addClass('active');
-    if (currentBatchInfo) {
-        const max = readStockQty(currentBatchInfo);
-        $('#addQty').attr('max', max);
-    }
+function addFromBatchSelection(productId, batchNumber) {
+    // Make batch selection behave like direct medicine selection: quick-add 1 qty.
+    suppressBatchAutoSelectUntil = Date.now() + 800;
+    $('#batchDropdown').removeClass('show').empty();
+    $('#batchSearch').val('');
+    addFromAdvancedSearch(productId, batchNumber);
 }
 
 // ============ MEDICINE SEARCH (TAB B) ============
@@ -666,16 +434,38 @@ $('#medicineSearch').on('input', debounce(function () {
         $('#medicineDropdown').removeClass('show').empty();
         return;
     }
-    fetch(`${MVC_BASE}/SearchMedicine?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.text())
-        .then(html => {
-            const dropdown = $('#medicineDropdown');
-            dropdown.html(html);
-            dropdown.addClass('show');
+    const query = q.toLowerCase();
+    const results = PREFETCH_STOCKS
+        .filter(s => (s?.productName || '').toString().toLowerCase().includes(query))
+        .sort((a, b) => {
+            const byName = String(a?.productName || '').localeCompare(String(b?.productName || ''), 'en', { sensitivity: 'base' });
+            if (byName !== 0) return byName;
+            return String(a?.batchNumber || '').localeCompare(String(b?.batchNumber || ''), 'en', { sensitivity: 'base' });
         })
-        .catch(() => {
-            $('#medicineDropdown').removeClass('show').empty();
-        });
+        .slice(0, 20);
+
+    const dropdown = $('#medicineDropdown');
+    if (!results.length) {
+        dropdown
+            .html('<div class="autocomplete-no-results"><i class="bi bi-capsule"></i> No medicine found</div>')
+            .addClass('show');
+        return;
+    }
+
+    const html = results.map(m => {
+        const manufacturer = (m.manufacturer || '').trim();
+        const manufacturerPrefix = manufacturer ? `${manufacturer} · ` : '';
+        return `
+            <div class="autocomplete-item" onclick="addFromDirectSelection('${m.productId}', '${String(m.batchNumber || '').replace(/'/g, "\\'")}')">
+                <div class="item-name">${String(m.productName || '')}</div>
+                <div class="item-detail">
+                    ${manufacturerPrefix}Batch: <strong>${String(m.batchNumber || '')}</strong> &middot; Stock: ${formatNumber(m.availableQty)} ${String(m.uomName || '')}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    dropdown.html(html).addClass('show');
 }));
 
 // ============ CART MANAGEMENT ============
@@ -750,84 +540,79 @@ function addFromAdvancedSearch(productId, batchNumber) {
     }
     inFlightBatchAdds.set(addKey, now);
 
-    fetch(`${MVC_BASE}/GetStockByProductBatch?productId=${encodeURIComponent(productId)}&batchNumber=${encodeURIComponent(batchNumber)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => {
-            if (!r.ok) throw new Error('not found');
-            return r.text();
-        })
-        .then(html => {
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            const payload = temp.querySelector('.stock-details-payload');
-            const json = payload?.getAttribute('data-stock-json');
-            if (!json) throw new Error('payload missing');
-            const b = normalizeStockPayload(JSON.parse(json));
-            if (!b) throw new Error('payload invalid');
+    try {
+        const match = findPrefetchedStock(productId, batchNumber);
+        if (!match) {
+            showToast('Stock not found in preloaded list', 'error');
+            return;
+        }
 
-            currentBatchInfo = b;
-
-            const fixedUnit = readStockUom(b);
-            selectedUnitType = fixedUnit;
-
-            const availableQty = readStockQty(b);
-            const productName = readStockProductName(b);
-            const batchNo = readStockBatchNumber(b);
-
-            currentBatchInfo.availableQty = availableQty;
-            currentBatchInfo.uomName = fixedUnit;
-            currentBatchInfo.productName = productName;
-            currentBatchInfo.batchNumber = batchNo;
-
-            const existingIndex = saleItems.findIndex(i => i.productId === currentBatchInfo.productId && i.batchNumber === currentBatchInfo.batchNumber && i.uomName === readStockUom(currentBatchInfo));
-            if (existingIndex >= 0) {
-                const newQty = Math.min((saleItems[existingIndex].quantity || 0) + 1, availableQty);
-                saleItems[existingIndex].quantity = newQty;
-                saleItems[existingIndex].unitType = fixedUnit;
-                saleItems[existingIndex].price = readStockMrp(currentBatchInfo);
-                saleItems[existingIndex].availableQty = availableQty;
-                if (saleItems[existingIndex].taxPercent === undefined || saleItems[existingIndex].taxPercent === null) {
-                    saleItems[existingIndex].taxPercent = currentBatchInfo.taxPercent ?? 0;
-                }
-                recalculateItem(existingIndex);
-                showToast(`Increased ${productName} quantity`, 'info');
-            } else {
-                const price = readStockMrp(currentBatchInfo);
-                const taxPercent = parseFloat(currentBatchInfo.taxPercent) || 0;
-                saleItems.push({
-                    productId: currentBatchInfo.productId,
-                    productName: productName,
-                    batchNumber: batchNo,
-                    expiryDate: currentBatchInfo.expiryDate,
-                    uomName: fixedUnit,
-                    quantity: 1,
-                    unitType: fixedUnit,
-                    price: price,
-                    discountPercent: 0,
-                    discountAmount: 0,
-                    taxPercent: taxPercent,
-                    taxAmount: 0,
-                    total: 0,
-                    availableQty: availableQty
-                });
-                recalculateItem(saleItems.length - 1);
-                showToast(`Added ${productName}`, 'success');
-            }
-
-            currentBatchInfo = null;
-            renderSaleItems();
-            // Quick-add changes subtotal; keep additional discount amount aligned
-            syncAdditionalDiscountAmountFromPercent();
-            recalculateBill();
-            updateSaleItemsSummary();
-            updateCompleteSaleBtn();
-        })
-        .catch(() => {
+        const b = normalizeStockPayload(match);
+        if (!b) {
             showToast('Failed to add item', 'error');
-        })
-        .finally(function () {
-            // Allow re-add after request finishes; quick-add is still protected by timestamp guard
-            inFlightBatchAdds.delete(addKey);
-        });
+            return;
+        }
+
+        currentBatchInfo = b;
+
+        const fixedUnit = readStockUom(b);
+        selectedUnitType = fixedUnit;
+
+        const availableQty = readStockQty(b);
+        const productName = readStockProductName(b);
+        const batchNo = readStockBatchNumber(b);
+
+        currentBatchInfo.availableQty = availableQty;
+        currentBatchInfo.uomName = fixedUnit;
+        currentBatchInfo.productName = productName;
+        currentBatchInfo.batchNumber = batchNo;
+
+        const existingIndex = saleItems.findIndex(i => i.productId === currentBatchInfo.productId && i.batchNumber === currentBatchInfo.batchNumber && i.uomName === readStockUom(currentBatchInfo));
+        if (existingIndex >= 0) {
+            const newQty = Math.min((saleItems[existingIndex].quantity || 0) + 1, availableQty);
+            saleItems[existingIndex].quantity = newQty;
+            saleItems[existingIndex].unitType = fixedUnit;
+            saleItems[existingIndex].price = readStockMrp(currentBatchInfo);
+            saleItems[existingIndex].availableQty = availableQty;
+            if (saleItems[existingIndex].taxPercent === undefined || saleItems[existingIndex].taxPercent === null) {
+                saleItems[existingIndex].taxPercent = currentBatchInfo.taxPercent ?? 0;
+            }
+            recalculateItem(existingIndex);
+            showToast(`Increased ${productName} quantity`, 'info');
+        } else {
+            const price = readStockMrp(currentBatchInfo);
+            const taxPercent = parseFloat(currentBatchInfo.taxPercent) || 0;
+            saleItems.push({
+                productId: currentBatchInfo.productId,
+                productName: productName,
+                batchNumber: batchNo,
+                expiryDate: currentBatchInfo.expiryDate,
+                uomName: fixedUnit,
+                quantity: 1,
+                unitType: fixedUnit,
+                price: price,
+                discountPercent: 0,
+                discountAmount: 0,
+                taxPercent: taxPercent,
+                taxAmount: 0,
+                total: 0,
+                availableQty: availableQty
+            });
+            recalculateItem(saleItems.length - 1);
+            showToast(`Added ${productName}`, 'success');
+        }
+
+        currentBatchInfo = null;
+        renderSaleItems();
+        // Quick-add changes subtotal; keep additional discount amount aligned
+        syncAdditionalDiscountAmountFromPercent();
+        recalculateBill();
+        updateSaleItemsSummary();
+        updateCompleteSaleBtn();
+    } finally {
+        // Allow re-add after local operation finishes; quick-add is still protected by timestamp guard
+        inFlightBatchAdds.delete(addKey);
+    }
 }
 
 function recalculateItem(index) {
@@ -998,6 +783,46 @@ function renderSaleItems() {
     });
 }
 
+function updateSaleItemsSummary() {
+    const summary = $('#saleItemsSummary');
+    if (!summary.length) return;
+
+    if (!saleItems.length) {
+        summary.hide();
+        $('#saleSummaryItems').val('0');
+        $('#saleSummaryMrp').val(formatCurrency(0));
+        $('#saleSummaryDiscountAmt').val(formatCurrency(0));
+        $('#saleSummaryTax').val(formatCurrency(0));
+        $('#saleSummaryPayable').val(formatCurrency(0));
+        return;
+    }
+
+    let subTotal = 0;
+    let discountAmt = 0;
+    let taxAmt = 0;
+    let payable = 0;
+
+    saleItems.forEach(item => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseFloat(item.quantity) || 0;
+        const disc = parseFloat(item.discountAmount) || 0;
+        const tax = parseFloat(item.taxAmount) || 0;
+        const total = parseFloat(item.total);
+
+        subTotal += price * qty;
+        discountAmt += disc;
+        taxAmt += tax;
+        payable += Number.isFinite(total) ? total : (Math.max(0, (price * qty) - disc) + tax);
+    });
+
+    $('#saleSummaryItems').val(String(saleItems.length));
+    $('#saleSummaryMrp').val(formatCurrency(subTotal));
+    $('#saleSummaryDiscountAmt').val(formatCurrency(discountAmt));
+    $('#saleSummaryTax').val(formatCurrency(taxAmt));
+    $('#saleSummaryPayable').val(formatCurrency(payable));
+    summary.show();
+}
+
 function updateItemQuantity(index, value) {
     const qty = parseInt(value) || 0;
     if (qty <= 0) {
@@ -1072,6 +897,39 @@ function formatSignedCurrency(amount) {
     return formatCurrency(0);
 }
 
+function getAdditionalDiscountPercent() {
+    const n = parseFloat($('#additionalDiscountPercent').val());
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(100, Math.max(0, n));
+}
+
+function getAdditionalDiscountAmount() {
+    const n = parseFloat($('#additionalDiscount').val());
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, n);
+}
+
+function computeSubtotalBeforeAdditionalDiscount() {
+    let subTotal = 0;
+    let itemDiscount = 0;
+    saleItems.forEach(item => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseFloat(item.quantity) || 0;
+        const discAmt = parseFloat(item.discountAmount) || 0;
+        subTotal += price * qty;
+        itemDiscount += discAmt;
+    });
+    return Math.max(0, subTotal - itemDiscount);
+}
+
+function syncAdditionalDiscountAmountFromPercent() {
+    const base = computeSubtotalBeforeAdditionalDiscount();
+    const percent = getAdditionalDiscountPercent();
+    const amt = base * percent / 100;
+    $('#additionalDiscountPercent').val(percent);
+    $('#additionalDiscount').val(amt.toFixed(2));
+}
+
 function recalculateBill() {
     let subTotal = 0;
     let itemDiscount = 0;
@@ -1112,6 +970,11 @@ function recalculateBill() {
     // Update payment amount
     updatePaymentAmount(displayGrandTotal);
 }
+
+$('#additionalDiscountPercent').on('input', debounce(function () {
+    syncAdditionalDiscountAmountFromPercent();
+    recalculateBill();
+}, 200));
 
 function updatePaymentAmount(grandTotal) {
     // Auto-fill payment amounts
@@ -1164,10 +1027,8 @@ function getGrandTotal() {
     const additionalDiscount = getAdditionalDiscountAmount();
     const unroundedGrandTotal = subTotal - itemDiscount - additionalDiscount + taxTotal;
     const baseGrandTotal = Math.max(0, unroundedGrandTotal);
-    if (selectedPaymentMethod === 'Cash') {
-        return roundToNearestRupee(baseGrandTotal);
-    }
-    return baseGrandTotal;
+    // Bill Settlement always shows rounded grand total; keep payments (Cash/Card/UPI/Split) aligned with it.
+    return roundToNearestRupee(baseGrandTotal);
 }
 
 $('#cashAmount').on('input', function () {
@@ -1434,6 +1295,11 @@ $(document).on('keydown', function (e) {
 
 // ============ INIT ============
 $(document).ready(function () {
+    if (!Array.isArray(window.__prefetchStocks)) {
+        safeNotify('Prefetch missing: window.__prefetchStocks is not an array');
+    } else if (!PREFETCH_STOCKS.length) {
+        safeNotify('Prefetch empty: 0 stock rows loaded');
+    }
     updateCompleteSaleBtn();
     recalculateBill();
 });

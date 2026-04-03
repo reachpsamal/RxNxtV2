@@ -411,5 +411,13 @@
 </div>
 
 @section Scripts {
+<script>
+    window.__prefetchStocks = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model?.PrefetchedStocks ?? new List<Rxnxt.Web.ViewModels.StockSearchItemViewModel>(),
+        new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        }));
+</script>
 <script src="~/js/pharmacy-sales.js"></script>
 }

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Logging")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+872522538d9b8b2c1a3f6acb4b85e9bc435553d4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b2fc5a31236c95c1e5a88697a6cd25fb852b5681")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Logging")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Logging")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

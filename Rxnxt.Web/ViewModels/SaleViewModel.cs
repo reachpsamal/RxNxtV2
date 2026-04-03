@@ -4,6 +4,7 @@ namespace Rxnxt.Web.ViewModels
     {
         public int? CustomerId { get; set; }
         public string? CustomerName { get; set; }
+        public List<StockSearchItemViewModel> PrefetchedStocks { get; set; } = new();
         public List<SaleItemViewModel> Items { get; set; } = new();
         public decimal SubTotal { get; set; }
         public decimal ItemDiscount { get; set; }
