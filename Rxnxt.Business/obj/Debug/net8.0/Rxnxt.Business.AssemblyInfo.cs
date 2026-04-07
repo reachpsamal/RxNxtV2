@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Business")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b2fc5a31236c95c1e5a88697a6cd25fb852b5681")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5ef4898136b139208a01222ca5774cc65021882c")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Business")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Business")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
