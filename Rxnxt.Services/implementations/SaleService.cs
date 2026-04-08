@@ -1,5 +1,6 @@
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
+using Rxnxt.Domain.Models;
 
 namespace Rxnxt.Services.Implementations;
 
@@ -20,5 +21,20 @@ public sealed class SaleService
         }
 
         return await _saleRepo.CompleteSaleAsync(request);
+    }
+
+    public async Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q)
+    {
+        return await _saleRepo.SearchSalesAsync(from, to, q);
+    }
+
+    public async Task<Sale?> GetByIdAsync(int id)
+    {
+        return await _saleRepo.GetByIdAsync(id);
+    }
+
+    public async Task<bool> CancelSaleAsync(int id)
+    {
+        return await _saleRepo.CancelSaleAsync(id);
     }
 }

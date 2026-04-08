@@ -31,5 +31,7 @@ namespace Rxnxt.Business.Interfaces
         Task<SaleResult> CompleteSaleAsync(CompleteSaleRequest request);
         Task<Sale?> GetByIdAsync(int id);
         Task<List<Sale>> GetRecentSalesAsync(int count = 10);
+        Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q);
+        Task<bool> CancelSaleAsync(int id);
     }
 }

@@ -1302,5 +1302,136 @@ $(document).ready(function () {
     }
     updateCompleteSaleBtn();
     recalculateBill();
+
+    const params = new URLSearchParams(window.location.search);
+    const editSaleId = params.get('editSaleId');
+    if (editSaleId) {
+        loadSaleForEdit(editSaleId);
+    }
 });
+
+function loadSaleForEdit(saleId) {
+    fetch(`${MVC_BASE}/GetSaleForEdit?id=${encodeURIComponent(saleId)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => {
+            if (!r.ok) throw new Error('Failed to load sale');
+            return r.json();
+        })
+        .then(data => {
+            if (!data) throw new Error('Sale data missing');
+
+            // Reset current draft
+            selectedCustomer = null;
+            saleItems = [];
+            currentBatchInfo = null;
+            selectedUnitType = 'PCS';
+
+            // Customer
+            if (data.customer && data.customer.id) {
+                selectedCustomer = { id: data.customer.id, name: data.customer.name || '', phone: data.customer.phone || '' };
+                $('#selectedCustomerCard').html(`
+                    <div class="customer-card" data-customer-json='${JSON.stringify(selectedCustomer).replace(/'/g, "&#39;")}'>
+                        <div class="customer-avatar">
+                            <i class="bi bi-person"></i>
+                        </div>
+                        <div class="customer-info">
+                            <div class="customer-name">${selectedCustomer.name}</div>
+                            <div class="customer-phone">${selectedCustomer.phone}</div>
+                        </div>
+                        <button class="customer-remove" onclick="removeCustomer()" title="Change">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                `).show();
+                $('#customerSearch').hide();
+                $('#toggleNewCustomerForm').hide();
+                $('#skipCustomerBtn').hide();
+            } else {
+                $('#selectedCustomerCard').hide().empty();
+                $('#customerSearch').show();
+                $('#toggleNewCustomerForm').show();
+                $('#skipCustomerBtn').show();
+            }
+
+            // Items
+            const items = Array.isArray(data.items) ? data.items : [];
+            items.forEach(i => {
+                const item = {
+                    productId: i.productId,
+                    productName: i.productName,
+                    batchNumber: i.batchNumber,
+                    expiryDate: i.expiryDate,
+                    uomName: i.uomName,
+                    quantity: parseFloat(i.quantity) || 0,
+                    unitType: i.unitType || (i.uomName || 'PCS'),
+                    price: parseFloat(i.price) || 0,
+                    discountPercent: parseFloat(i.discountPercent) || 0,
+                    discountAmount: parseFloat(i.discountAmount) || 0,
+                    taxPercent: parseFloat(i.taxPercent) || 0,
+                    taxAmount: parseFloat(i.taxAmount) || 0,
+                    total: parseFloat(i.total) || 0,
+                    availableQty: i.availableQty
+                };
+                saleItems.push(item);
+            });
+
+            // Additional discount
+            const addDisc = parseFloat(data.additionalDiscount) || 0;
+            $('#additionalDiscount').val(addDisc.toFixed(2));
+            // back-calc percent from current subtotal-after-item-discount
+            const base = computeSubtotalBeforeAdditionalDiscount();
+            const percent = base > 0 ? (addDisc / base) * 100 : 0;
+            $('#additionalDiscountPercent').val(percent.toFixed(2));
+
+            // Payment prefill
+            const p = data.payment || {};
+            const method = (p.method || 'Cash').toString();
+            selectPaymentMethod(method);
+
+            // Cash
+            if (p.cashReceived !== undefined && p.cashReceived !== null) {
+                $('#cashAmount').val(parseFloat(p.cashReceived).toFixed(2));
+            }
+            // Card
+            if (p.cardRefNo !== undefined && p.cardRefNo !== null) {
+                $('#cardRefNo').val(p.cardRefNo);
+            }
+            if (p.cardAmount !== undefined && p.cardAmount !== null) {
+                $('#cardAmount').val(parseFloat(p.cardAmount).toFixed(2));
+            }
+            // UPI
+            if (p.upiRefNo !== undefined && p.upiRefNo !== null) {
+                $('#upiRefNo').val(p.upiRefNo);
+            }
+            if (p.upiAmount !== undefined && p.upiAmount !== null) {
+                $('#upiAmount').val(parseFloat(p.upiAmount).toFixed(2));
+            }
+            // Split
+            if (p.splitCash !== undefined && p.splitCash !== null) {
+                $('#splitCash').val(parseFloat(p.splitCash).toFixed(2));
+            }
+            if (p.splitCard !== undefined && p.splitCard !== null) {
+                $('#splitCard').val(parseFloat(p.splitCard).toFixed(2));
+            }
+            if (p.splitUpi !== undefined && p.splitUpi !== null) {
+                $('#splitUpi').val(parseFloat(p.splitUpi).toFixed(2));
+            }
+            if (p.splitCardRefNo !== undefined && p.splitCardRefNo !== null) {
+                $('#splitCardRefNo').val(p.splitCardRefNo);
+            }
+            if (p.splitUpiRefNo !== undefined && p.splitUpiRefNo !== null) {
+                $('#splitUpiRefNo').val(p.splitUpiRefNo);
+            }
+            if (method === 'Split') {
+                syncSplitPayments(null, true);
+            }
+
+            renderSaleItems();
+            recalculateBill();
+            updateCompleteSaleBtn();
+            switchMedicineTab('batch');
+        })
+        .catch(err => {
+            showToast(err?.message || 'Failed to load sale', 'error');
+        });
+}
 

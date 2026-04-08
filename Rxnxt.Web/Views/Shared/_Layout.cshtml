@@ -58,11 +58,11 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <nav class="sidebar-nav">
-                <a href="@Url.Action("Index", "Sales")" class="nav-item active" title="New Sale">
+                <a href="@Url.Action("Index", "Sales")" class="nav-item @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" && ViewContext.RouteData.Values["controller"]?.ToString() == "Sales" ? "active" : "")" title="New Sale">
                     <i class="bi bi-cart-plus"></i>
                     <span>New Sale</span>
                 </a>
-                <a href="#" class="nav-item" title="Sales History">
+                <a href="@Url.Action("History", "Sales")" class="nav-item @(ViewContext.RouteData.Values["action"]?.ToString() == "History" && ViewContext.RouteData.Values["controller"]?.ToString() == "Sales" ? "active" : "")" title="Sales History">
                     <i class="bi bi-clock-history"></i>
                     <span>History</span>
                 </a>

@@ -1,0 +1,105 @@
+@model Rxnxt.Domain.Models.Sale
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Print - @Model.InvoiceNumber</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 24px; font-family: Arial, sans-serif; }
+        .muted { color: #666; }
+        .mono { font-variant-numeric: tabular-nums; }
+        @@media print {
+            .no-print { display: none !important; }
+            body { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom:16px; display:flex; gap:8px;">
+        <button class="btn btn-primary" onclick="window.print()">Print</button>
+        <button class="btn btn-outline-secondary" onclick="window.close()">Close</button>
+    </div>
+
+    <h3 style="margin:0;">Invoice</h3>
+    <div class="muted">@Model.InvoiceNumber</div>
+    <div class="muted">@Model.SaleDate.ToString("dd-MMM-yyyy hh:mm tt")</div>
+
+    <hr />
+
+    <div style="margin-bottom:12px;">
+        <div><strong>Customer:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
+        @if (Model.Customer != null)
+        {
+            <div class="muted">@Model.Customer.Phone</div>
+        }
+    </div>
+
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Batch</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Price</th>
+                <th class="text-end">Disc</th>
+                <th class="text-end">Tax</th>
+                <th class="text-end">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var i in Model.SaleItems)
+            {
+                <tr>
+                    <td>
+                        <div><strong>@i.ProductName</strong></div>
+                        <div class="muted">@i.UomName</div>
+                    </td>
+                    <td>
+                        <div>@i.BatchNumber</div>
+                        <div class="muted">Exp: @i.ExpiryDate.ToString("dd-MMM-yyyy")</div>
+                    </td>
+                    <td class="text-end mono">@i.Quantity</td>
+                    <td class="text-end mono">@i.Price.ToString("0.00")</td>
+                    <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
+                    <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
+                    <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <hr />
+
+    <div style="max-width:420px; margin-left:auto;">
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span class="mono">@Model.SubTotal.ToString("0.00")</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">@Model.ItemDiscount.ToString("0.00")</span></div>
+        <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">@Model.AdditionalDiscount.ToString("0.00")</span></div>
+        <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>@Model.GrandTotal.ToString("0.00")</strong></span></div>
+    </div>
+
+    <hr />
+
+    <div>
+        <strong>Payments</strong>
+        <ul>
+            @foreach (var p in Model.Payments)
+            {
+                <li>@p.PaymentMode - @p.Amount.ToString("0.00") @if (!string.IsNullOrWhiteSpace(p.Reference)) { <span class="muted">(@p.Reference)</span> }</li>
+            }
+        </ul>
+    </div>
+
+    <script>
+        window.addEventListener('load', function () {
+            window.print();
+        });
+    </script>
+</body>
+</html>

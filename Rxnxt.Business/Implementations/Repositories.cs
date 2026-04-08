@@ -370,5 +370,40 @@ namespace Rxnxt.Business.Implementations
                 .OrderByDescending(s => s.SaleDate)
                 .Take(count)
                 .ToListAsync();
+
+        public async Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q)
+        {
+            var fromDt = from;
+            var toDt = to;
+
+            var query = _context.Sales
+                .AsNoTracking()
+                .Include(s => s.Customer)
+                .Where(s => s.SaleDate >= fromDt && s.SaleDate <= toDt)
+                .Where(s => s.PaymentStatus != "Cancelled");
+
+            var term = (q ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                query = query.Where(s =>
+                    (s.InvoiceNumber != null && s.InvoiceNumber.Contains(term)) ||
+                    (s.Customer != null && s.Customer.Name.Contains(term)) ||
+                    (s.Customer != null && s.Customer.Phone.Contains(term))
+                );
+            }
+
+            return await query
+                .OrderByDescending(s => s.SaleDate)
+                .ToListAsync();
+        }
+
+        public async Task<bool> CancelSaleAsync(int id)
+        {
+            var sale = await _context.Sales.FirstOrDefaultAsync(s => s.Id == id);
+            if (sale == null) return false;
+            sale.PaymentStatus = "Cancelled";
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

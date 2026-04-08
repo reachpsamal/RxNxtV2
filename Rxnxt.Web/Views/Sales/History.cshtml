@@ -1,0 +1,96 @@
+@model Rxnxt.Web.ViewModels.SalesHistoryViewModel
+
+@{
+    ViewData["Title"] = "Sales History";
+}
+
+<div class="section-card">
+    <div class="section-header">
+        <div class="section-title">
+            <i class="bi bi-clock-history"></i>
+            Sales History
+        </div>
+    </div>
+    <div class="section-body">
+        <form method="get" asp-controller="Sales" asp-action="History" class="row g-2 sales-history-filter" style="align-items:end;">
+            <div class="col-md-3">
+                <label class="form-label-custom">From</label>
+                <input type="date" class="pharmacy-input" name="from" value="@Model.Filter.From.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label-custom">To</label>
+                <input type="date" class="pharmacy-input" name="to" value="@Model.Filter.To.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label-custom">Search</label>
+                <input type="text" class="pharmacy-input" name="q" value="@Model.Filter.Query" placeholder="Invoice / Customer / Phone" />
+            </div>
+            <div class="col-md-2" style="display:flex; gap:8px;">
+                <button type="submit" class="btn-primary-pharmacy" style="flex:1;">
+                    <i class="bi bi-search"></i> Search
+                </button>
+                <a class="btn-ghost" style="flex:1; justify-content:center; display:inline-flex; align-items:center;" href="@Url.Action("History", "Sales", new { from = DateTime.Today.ToString("yyyy-MM-dd"), to = DateTime.Today.ToString("yyyy-MM-dd") })">
+                    Today
+                </a>
+            </div>
+        </form>
+
+        <div style="margin-top:16px;">
+            @if (Model.Rows == null || Model.Rows.Count == 0)
+            {
+                <div class="autocomplete-no-results" style="padding:20px;">
+                    <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                    No sales found
+                </div>
+            }
+            else
+            {
+                <table class="sale-items-table" style="display: table;">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Rows)
+                        {
+                            <tr>
+                                <td style="font-weight:700;">@s.InvoiceNumber</td>
+                                <td>@s.SaleDate.ToString("dd-MMM-yyyy hh:mm tt")</td>
+                                <td>
+                                    <div style="font-weight:600;">@s.CustomerName</div>
+                                    <div style="font-size:0.78rem;color:var(--gray-500);">@s.CustomerPhone</div>
+                                </td>
+                                <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @s.GrandTotal.ToString("0.00")</td>
+                                <td>@s.PaymentStatus</td>
+                                <td style="white-space:nowrap;">
+                                    <a class="btn-outline-pharmacy" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.Id })">
+                                        <i class="bi bi-pencil-square"></i> Edit
+                                    </a>
+                                    <a class="btn-outline-pharmacy" style="padding:8px 10px;" target="_blank" href="@Url.Action("Print", "Sales", new { id = s.Id })">
+                                        <i class="bi bi-printer"></i> Print
+                                    </a>
+                                    <form method="post" asp-controller="Sales" asp-action="Cancel" style="display:inline;" onsubmit="return confirm('Cancel this sale?');">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@s.Id" />
+                                        <input type="hidden" name="from" value="@Model.Filter.From.ToString("yyyy-MM-dd")" />
+                                        <input type="hidden" name="to" value="@Model.Filter.To.ToString("yyyy-MM-dd")" />
+                                        <input type="hidden" name="q" value="@Model.Filter.Query" />
+                                        <button type="submit" class="btn-ghost" style="padding:8px 10px; color: var(--danger-600);">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>

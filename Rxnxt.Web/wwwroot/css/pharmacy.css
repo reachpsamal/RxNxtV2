@@ -1374,6 +1374,17 @@ body {
     box-shadow: 0 12px 26px rgba(30, 170, 105, 0.28);
 }
 
+.sales-history-filter .btn-primary-pharmacy {
+    background: #1eaa69;
+    border: none;
+    box-shadow: 0 10px 22px rgba(30, 170, 105, 0.18);
+}
+
+.sales-history-filter .btn-primary-pharmacy:hover {
+    background: #17945b;
+    box-shadow: 0 12px 26px rgba(30, 170, 105, 0.28);
+}
+
 /* ============================== */
 /* BATCH INFO CARD               */
 /* ============================== */
