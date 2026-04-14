@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
@@ -247,7 +248,12 @@ namespace Rxnxt.Business.Implementations
     public class SaleRepository : ISaleRepository
     {
         private readonly PharmacyDbContext _context;
-        public SaleRepository(PharmacyDbContext context) => _context = context;
+        private readonly IConfiguration _configuration;
+        public SaleRepository(PharmacyDbContext context, IConfiguration configuration)
+        {
+            _context = context;
+            _configuration = configuration;
+        }
 
         public async Task<SaleResult> CompleteSaleAsync(CompleteSaleRequest request)
         {
@@ -298,57 +304,119 @@ namespace Rxnxt.Business.Implementations
 
                 decimal grandTotal = subTotal - totalItemDiscount - request.AdditionalDiscount + totalTax;
 
-                var saleCount = await _context.Sales.CountAsync() + 1;
-                string invoiceNumber = $"INV-{DateTime.Now:yyyyMMdd}-{saleCount:D4}";
-
-                var sale = new Sale
+                var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+                if (salesIntegrationEnabled)
                 {
-                    CustomerId = request.CustomerId,
-                    SaleDate = DateTime.Now,
-                    SubTotal = subTotal,
-                    ItemDiscount = totalItemDiscount,
-                    AdditionalDiscount = request.AdditionalDiscount,
-                    GrandTotal = grandTotal,
-                    PaymentStatus = "Completed",
-                    InvoiceNumber = invoiceNumber,
-                    SaleItems = saleItems
-                };
+                    var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
+                    var storeId = _configuration["SalesIntegration:StoreId"] ?? string.Empty;
+                    var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
+                    var billType = _configuration["SalesIntegration:BillType"] ?? "Sale";
 
-                _context.Sales.Add(sale);
-                await _context.SaveChangesAsync();
+                    var now = DateTime.Now;
+                    var headerUniqueId = Guid.NewGuid().ToString();
+                    var customerIdStr = request.CustomerId?.ToString() ?? "0";
+                    var amountBeforeTax = subTotal - totalItemDiscount - request.AdditionalDiscount;
+                    var discountAmount = totalItemDiscount + request.AdditionalDiscount;
+                    var discountPerc = subTotal > 0 ? (discountAmount / subTotal) * 100 : 0;
 
-                foreach (var payment in request.Payments)
-                {
-                    _context.Payments.Add(new Payment
+                    var header = new SaleHeaderRow
                     {
-                        SaleId = sale.Id,
-                        PaymentMode = payment.PaymentMode,
-                        Amount = payment.Amount,
-                        Reference = payment.Reference,
-                        Status = "Completed",
-                        PaymentDate = DateTime.Now
-                    });
-                }
+                        UniqueID = headerUniqueId,
+                        BillNo = "INV-0",
+                        BillDate = now,
+                        BillType = billType,
+                        CustomerID = customerIdStr,
+                        Narration = null,
+                        BillAmount = grandTotal,
+                        TaxAmount = totalTax,
+                        DiscountAmount = discountAmount,
+                        ExtraAdd = 0,
+                        ExtraLess = 0,
+                        ActiveStatus = true,
+                        CreatedBy = createdBy,
+                        CreatedDate = now,
+                        ModifiedBy = null,
+                        ModifiedDate = null,
+                        TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
+                        DiscountPerc = discountPerc,
+                        AmountBeforeTax = amountBeforeTax,
+                        StoreId = string.IsNullOrWhiteSpace(storeId) ? null : storeId
+                    };
 
-                if (request.CustomerId.HasValue)
-                {
-                    var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
-                    if (customer != null)
+                    _context.SaleHeaders.Add(header);
+                    await _context.SaveChangesAsync();
+
+                    header.BillNo = $"INV-{header.ID}";
+                    await _context.SaveChangesAsync();
+
+                    foreach (var item in request.Items)
                     {
-                        customer.LoyaltyPoints += (int)(grandTotal / 10);
+                        decimal unitPrice = item.UnitPrice;
+                        decimal lineTotal = unitPrice * item.Quantity;
+                        decimal discountAmt = lineTotal * (item.DiscountPercent / 100);
+                        decimal taxable = lineTotal - discountAmt;
+                        decimal taxAmt = taxable * (item.TaxPercent / 100);
+                        decimal total = taxable + taxAmt;
+
+                        var halfTax = taxAmt / 2;
+
+                        _context.SaleDetails.Add(new SaleDetailRow
+                        {
+                            UniqueID = Guid.NewGuid().ToString(),
+                            SaleID = headerUniqueId,
+                            ProductID = item.ProductId.ToString(),
+                            BatchNumber = item.BatchNumber,
+                            ExpiryDate = item.ExpiryDate,
+                            UnitID = null,
+                            PackTypeID = null,
+                            MRP = unitPrice,
+                            PurchasePrice = null,
+                            SalePrice = unitPrice,
+                            FreeQty = 0,
+                            Remarks = null,
+                            Qty = item.Quantity,
+                            TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
+                            BaseUOMID = null,
+                            SaleUOMID = item.UomName,
+                            SaleUOMQty = item.Quantity,
+                            ItemDiscPerc = Math.Round(item.DiscountPercent, 0),
+                            ItemDiscAmount = Math.Round(discountAmt, 0),
+                            TaxableAmount = taxable,
+                            CGSTAmount = halfTax,
+                            SGSTAmount = halfTax,
+                            IGSTAmount = 0,
+                            TotalTaxAmount = taxAmt,
+                            ItemTotal = total,
+                            TaxPerc = item.TaxPercent
+                        });
                     }
+
+                    foreach (var payment in request.Payments)
+                    {
+                        _context.SalePayments.Add(new SalePaymentRow
+                        {
+                            PaymentId = Guid.NewGuid().ToString(),
+                            SaleId = headerUniqueId,
+                            PaymentMode = payment.PaymentMode,
+                            Amount = payment.Amount,
+                            ReferenceNo = payment.Reference,
+                            PaymentDate = now
+                        });
+                    }
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    return new SaleResult
+                    {
+                        Success = true,
+                        Message = "Sale completed successfully!",
+                        SaleId = null,
+                        InvoiceNumber = header.BillNo
+                    };
                 }
 
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                return new SaleResult
-                {
-                    Success = true,
-                    Message = "Sale completed successfully!",
-                    SaleId = sale.Id,
-                    InvoiceNumber = invoiceNumber
-                };
+                return new SaleResult { Success = false, Message = "SalesIntegration is disabled but legacy Sales tables are not available." };
             }
             catch (Exception ex)
             {
@@ -373,32 +441,101 @@ namespace Rxnxt.Business.Implementations
 
         public async Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q)
         {
-            var fromDt = from;
-            var toDt = to;
-
-            var query = _context.Sales
-                .AsNoTracking()
-                .Include(s => s.Customer)
-                .Where(s => s.SaleDate >= fromDt && s.SaleDate <= toDt)
-                .Where(s => s.PaymentStatus != "Cancelled");
-
-            var term = (q ?? string.Empty).Trim();
-            if (!string.IsNullOrWhiteSpace(term))
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
             {
-                query = query.Where(s =>
-                    (s.InvoiceNumber != null && s.InvoiceNumber.Contains(term)) ||
-                    (s.Customer != null && s.Customer.Name.Contains(term)) ||
-                    (s.Customer != null && s.Customer.Phone.Contains(term))
-                );
+                var fromDt = from;
+                var toDt = to;
+
+                var term = (q ?? string.Empty).Trim();
+
+                var headerQuery = _context.SaleHeaders
+                    .AsNoTracking()
+                    .Where(h => h.BillDate >= fromDt && h.BillDate <= toDt);
+
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+
+                if (!string.IsNullOrWhiteSpace(term))
+                {
+                    headerQuery = headerQuery.Where(h =>
+                        (h.BillNo != null && h.BillNo.Contains(term)) ||
+                        (h.CustomerID != null && h.CustomerID.Contains(term))
+                    );
+                }
+
+                var headers = await headerQuery
+                    .OrderByDescending(h => h.BillDate)
+                    .ToListAsync();
+
+                var sales = headers.Select(h =>
+                {
+                    return new Sale
+                    {
+                        Id = h.ID,
+                        SaleDate = h.BillDate,
+                        InvoiceNumber = h.BillNo,
+                        CustomerId = null,
+                        Customer = null,
+                        SubTotal = h.AmountBeforeTax ?? 0,
+                        ItemDiscount = h.DiscountAmount ?? 0,
+                        AdditionalDiscount = 0,
+                        GrandTotal = h.BillAmount ?? 0,
+                        PaymentStatus = h.ActiveStatus ? "Completed" : "Cancelled",
+                        SaleItems = new List<SaleItem>(),
+                        Payments = new List<Payment>()
+                    };
+                }).ToList();
+
+                if (!string.IsNullOrWhiteSpace(term))
+                {
+                    sales = sales.Where(s =>
+                        (s.InvoiceNumber != null && s.InvoiceNumber.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                        (s.Customer != null && s.Customer.Name.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                        (s.Customer != null && s.Customer.Phone.Contains(term, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+                }
+
+                return sales;
             }
 
-            return await query
-                .OrderByDescending(s => s.SaleDate)
-                .ToListAsync();
+            {
+                var fromDt = from;
+                var toDt = to;
+
+                var query = _context.Sales
+                    .AsNoTracking()
+                    .Include(s => s.Customer)
+                    .Where(s => s.SaleDate >= fromDt && s.SaleDate <= toDt)
+                    .Where(s => s.PaymentStatus != "Cancelled");
+
+                var term = (q ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(term))
+                {
+                    query = query.Where(s =>
+                        (s.InvoiceNumber != null && s.InvoiceNumber.Contains(term)) ||
+                        (s.Customer != null && s.Customer.Name.Contains(term)) ||
+                        (s.Customer != null && s.Customer.Phone.Contains(term))
+                    );
+                }
+
+                return await query
+                    .OrderByDescending(s => s.SaleDate)
+                    .ToListAsync();
+            }
         }
 
         public async Task<bool> CancelSaleAsync(int id)
         {
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
+            {
+                var header = await _context.SaleHeaders.FirstOrDefaultAsync(h => h.ID == id);
+                if (header == null) return false;
+                header.ActiveStatus = false;
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
             var sale = await _context.Sales.FirstOrDefaultAsync(s => s.Id == id);
             if (sale == null) return false;
             sale.PaymentStatus = "Cancelled";

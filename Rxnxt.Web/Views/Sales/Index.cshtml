@@ -43,32 +43,19 @@
             <div class="section-body">
                 <!-- Tabs -->
                 <div class="pharmacy-tabs">
-                    <button class="pharmacy-tab active" onclick="switchMedicineTab('batch')" id="tabBatch">
-                        <i class="bi bi-upc-scan"></i> Batch Number Sale
-                    </button>
-                    <button class="pharmacy-tab" onclick="switchMedicineTab('direct')" id="tabDirect">
+                    <button class="pharmacy-tab active" onclick="switchMedicineTab('direct')" id="tabDirect">
                         <i class="bi bi-search-heart"></i> Direct Medicine Sale
+                    </button>
+                    <button class="pharmacy-tab" onclick="switchMedicineTab('batch')" id="tabBatch">
+                        <i class="bi bi-upc-scan"></i> Batch Number Sale
                     </button>
                     <button class="pharmacy-tab" onclick="switchMedicineTab('advanced')" id="tabAdvanced">
                         <i class="bi bi-funnel"></i> Advanced Search
                     </button>
                 </div>
 
-                <!-- TAB A: Batch Number Sale -->
-                <div class="tab-content-pharmacy active" id="tabContentBatch">
-                    <div class="input-group-pharmacy" style="position: relative;">
-                        <i class="bi bi-upc-scan input-icon"></i>
-                        <input type="text" class="pharmacy-input" id="batchSearch"
-                               placeholder="Enter or scan batch number..." autocomplete="off">
-                        <div class="autocomplete-dropdown" id="batchDropdown"></div>
-                    </div>
-                    <div class="batch-info-card" id="batchInfoCard">
-                        <!-- Dynamically filled -->
-                    </div>
-                </div>
-
                 <!-- TAB B: Direct Sale -->
-                <div class="tab-content-pharmacy" id="tabContentDirect">
+                <div class="tab-content-pharmacy active" id="tabContentDirect">
                     <div class="input-group-pharmacy" style="position: relative;">
                         <i class="bi bi-search input-icon"></i>
                         <input type="text" class="pharmacy-input" id="medicineSearch"
@@ -76,6 +63,19 @@
                         <div class="autocomplete-dropdown" id="medicineDropdown"></div>
                     </div>
                     <div class="batch-info-card" id="medicineBatchesCard">
+                        <!-- Dynamically filled -->
+                    </div>
+                </div>
+
+                <!-- TAB A: Batch Number Sale -->
+                <div class="tab-content-pharmacy" id="tabContentBatch">
+                    <div class="input-group-pharmacy" style="position: relative;">
+                        <i class="bi bi-upc-scan input-icon"></i>
+                        <input type="text" class="pharmacy-input" id="batchSearch"
+                               placeholder="Enter or scan batch number..." autocomplete="off">
+                        <div class="autocomplete-dropdown" id="batchDropdown"></div>
+                    </div>
+                    <div class="batch-info-card" id="batchInfoCard">
                         <!-- Dynamically filled -->
                     </div>
                 </div>

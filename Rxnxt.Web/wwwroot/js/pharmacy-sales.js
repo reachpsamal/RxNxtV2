@@ -345,7 +345,7 @@ function addFromDirectSelection(productId, batchNumber) {
     addFromAdvancedSearch(productId, batchNumber);
     $('#medicineDropdown').removeClass('show').empty();
     $('#medicineBatchesCard').removeClass('show').empty();
-    $('#medicineSearch').val('').focus();
+    $('#medicineSearch').val('');
 }
 
 // ============ BATCH SEARCH (TAB A) ============
@@ -1257,7 +1257,7 @@ function startNewSale() {
     $('#successOverlay').removeClass('show');
 
     updateCompleteSaleBtn();
-    switchMedicineTab('batch');
+    switchMedicineTab('direct');
 }
 
 // ============ CLICK OUTSIDE TO CLOSE DROPDOWNS ============
@@ -1302,6 +1302,8 @@ $(document).ready(function () {
     }
     updateCompleteSaleBtn();
     recalculateBill();
+
+    switchMedicineTab('direct');
 
     const params = new URLSearchParams(window.location.search);
     const editSaleId = params.get('editSaleId');

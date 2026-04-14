@@ -16,9 +16,19 @@ namespace Rxnxt.Business.Data
         public DbSet<SaleItem> SaleItems { get; set; }
         public DbSet<Payment> Payments { get; set; }
 
+        public DbSet<SaleHeaderRow> SaleHeaders { get; set; }
+        public DbSet<SaleDetailRow> SaleDetails { get; set; }
+        public DbSet<SalePaymentRow> SalePayments { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.HasDefaultSchema("dbo");
+
+            modelBuilder.Entity<SaleHeaderRow>().ToTable("SaleHeader");
+            modelBuilder.Entity<SaleDetailRow>().ToTable("SaleDetail");
+            modelBuilder.Entity<SalePaymentRow>().ToTable("SalePayment");
 
             // Customer
             modelBuilder.Entity<Customer>(entity =>

@@ -35,6 +35,8 @@ builder.Services.AddScoped<ISaleRepository, SaleRepository>();
 // Register Services
 builder.Services.AddRxnxtServices();
 
+
+
 // External API services
 builder.Services.AddHttpClient<StockService>();
 
@@ -43,23 +45,11 @@ builder.Services.AddRxnxtLogging();
 
 var app = builder.Build();
 
-// Apply migrations and seed data on startup
+// Validate DB connectivity on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PharmacyDbContext>();
-
-    // Check if we should reset and reseed data (for demo purposes)
-    var resetData = Environment.GetEnvironmentVariable("RESET_DEMO_DATA")?.ToLower() == "true";
-
-    if (resetData)
-    {
-        db.Database.EnsureDeleted();
-    }
-
-    db.Database.EnsureCreated();
-
-    // Seed demo data with optional force reset
-    DemoDataSeeder.SeedData(db, resetData);
+    db.Database.CanConnect();
 }
 
 // Configure the HTTP request pipeline.

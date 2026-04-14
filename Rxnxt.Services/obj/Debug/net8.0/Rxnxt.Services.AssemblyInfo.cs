@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Services")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7d3a1243b8434bd2727d109de9e46e483da98acc")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c91613e3de12373a82cd04d699f10bc638bd6c1f")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Services")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Services")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
