@@ -426,11 +426,108 @@ namespace Rxnxt.Business.Implementations
         }
 
         public async Task<Sale?> GetByIdAsync(int id) =>
-            await _context.Sales
-                .Include(s => s.Customer)
-                .Include(s => s.SaleItems)
-                .Include(s => s.Payments)
-                .FirstOrDefaultAsync(s => s.Id == id);
+            string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase)
+                ? await GetIntegrationSaleByIdAsync(id)
+                : await _context.Sales
+                    .Include(s => s.Customer)
+                    .Include(s => s.SaleItems)
+                    .Include(s => s.Payments)
+                    .FirstOrDefaultAsync(s => s.Id == id);
+
+        private async Task<Sale?> GetIntegrationSaleByIdAsync(int id)
+        {
+            var header = await _context.SaleHeaders.AsNoTracking().FirstOrDefaultAsync(h => h.ID == id);
+            if (header == null) return null;
+
+            var details = await _context.SaleDetails
+                .AsNoTracking()
+                .Where(d => d.SaleID == header.UniqueID)
+                .ToListAsync();
+
+            var productIds = details
+                .Select(d => (d.ProductID ?? string.Empty).Trim())
+                .Where(pid => !string.IsNullOrWhiteSpace(pid))
+                .Distinct()
+                .ToList();
+
+            var productNameById = productIds.Count == 0
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : (await _context.ProductMasters
+                        .AsNoTracking()
+                        .Where(p => productIds.Contains(p.UniqueID))
+                        .Select(p => new { p.UniqueID, p.ProductName })
+                        .ToListAsync())
+                    .Where(p => !string.IsNullOrWhiteSpace(p.UniqueID))
+                    .GroupBy(p => p.UniqueID.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.FirstOrDefault()?.ProductName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+            var payments = await _context.SalePayments
+                .AsNoTracking()
+                .Where(p => p.SaleId == header.UniqueID)
+                .ToListAsync();
+
+            var sale = new Sale
+            {
+                Id = header.ID,
+                CustomerId = null,
+                Customer = null,
+                SaleDate = header.BillDate,
+                SubTotal = header.AmountBeforeTax ?? 0,
+                ItemDiscount = header.DiscountAmount ?? 0,
+                AdditionalDiscount = 0,
+                GrandTotal = header.BillAmount ?? 0,
+                PaymentStatus = header.ActiveStatus ? "Completed" : "Cancelled",
+                InvoiceNumber = header.BillNo,
+                SaleItems = new List<SaleItem>(),
+                Payments = new List<Payment>()
+            };
+
+            foreach (var d in details)
+            {
+                var productId = Guid.Empty;
+                _ = Guid.TryParse(d.ProductID, out productId);
+
+                var pidKey = (d.ProductID ?? string.Empty).Trim();
+                var productName = (!string.IsNullOrWhiteSpace(pidKey) && productNameById.TryGetValue(pidKey, out var pn) && !string.IsNullOrWhiteSpace(pn))
+                    ? pn
+                    : pidKey;
+
+                sale.SaleItems.Add(new SaleItem
+                {
+                    Id = d.ID,
+                    SaleId = sale.Id,
+                    ProductId = productId,
+                    ProductName = productName,
+                    BatchNumber = d.BatchNumber ?? string.Empty,
+                    ExpiryDate = d.ExpiryDate ?? DateTime.Today,
+                    UomName = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
+                    Quantity = (int)Math.Round(d.Qty ?? 0, 0),
+                    UnitType = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
+                    Price = d.SalePrice ?? d.MRP ?? 0,
+                    DiscountPercent = d.ItemDiscPerc ?? 0,
+                    DiscountAmount = d.ItemDiscAmount ?? 0,
+                    TaxPercent = d.TaxPerc ?? 0,
+                    TaxAmount = d.TotalTaxAmount ?? 0,
+                    Total = d.ItemTotal ?? 0
+                });
+            }
+
+            foreach (var p in payments)
+            {
+                sale.Payments.Add(new Payment
+                {
+                    Id = 0,
+                    SaleId = sale.Id,
+                    PaymentMode = p.PaymentMode,
+                    Amount = p.Amount,
+                    Reference = p.ReferenceNo,
+                    Status = "Completed",
+                    PaymentDate = p.PaymentDate
+                });
+            }
+
+            return sale;
+        }
 
         public async Task<List<Sale>> GetRecentSalesAsync(int count = 10) =>
             await _context.Sales

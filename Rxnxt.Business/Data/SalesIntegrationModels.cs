@@ -181,3 +181,14 @@ public sealed class SalePaymentRow
 
     public DateTime PaymentDate { get; set; }
 }
+
+[Table("ProductMaster")]
+public sealed class ProductMasterRow
+{
+    [Key]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [StringLength(300)]
+    public string? ProductName { get; set; }
+}

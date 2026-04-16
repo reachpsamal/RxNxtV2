@@ -74,6 +74,12 @@ function readStockProductId(stock) {
     return readStockValue(stock, 'productId', 'ProductId');
 }
 
+function findStockByProductId(productId) {
+    const pid = String(productId || '').trim().toLowerCase();
+    if (!pid) return null;
+    return PREFETCH_STOCKS.find(s => String(s?.productId || '').trim().toLowerCase() === pid) || null;
+}
+
 function readStockMrp(stock) {
     const v = readStockValue(stock, 'mrp', 'Mrp', 'unitPrice', 'UnitPrice');
     const n = parseFloat(v);
@@ -417,6 +423,10 @@ function findPrefetchedStock(productId, batchNumber) {
     const bn = String(batchNumber || '').trim().toLowerCase();
     if (!pid || !bn) return null;
     return PREFETCH_STOCKS.find(s => String(s?.productId || '').trim().toLowerCase() === pid && String(s?.batchNumber || '').trim().toLowerCase() === bn) || null;
+}
+
+function findStockByProductBatch(productId, batchNumber) {
+    return findPrefetchedStock(productId, batchNumber);
 }
 
 function addFromBatchSelection(productId, batchNumber) {
@@ -1355,14 +1365,18 @@ function loadSaleForEdit(saleId) {
             }
 
             // Items
-            const items = Array.isArray(data.items) ? data.items : [];
+            const items = data.items || [];
+            saleItems = [];
             items.forEach(i => {
+                const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
+                const resolvedName = readStockProductName(stock) || '';
+                const resolvedUom = readStockUom(stock) || 'PCS';
                 const item = {
                     productId: i.productId,
-                    productName: i.productName,
+                    productName: (i.productName && String(i.productName).trim()) ? i.productName : resolvedName,
                     batchNumber: i.batchNumber,
                     expiryDate: i.expiryDate,
-                    uomName: i.uomName,
+                    uomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
                     quantity: parseFloat(i.quantity) || 0,
                     unitType: i.unitType || (i.uomName || 'PCS'),
                     price: parseFloat(i.price) || 0,
