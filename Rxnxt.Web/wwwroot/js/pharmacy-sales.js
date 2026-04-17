@@ -1194,8 +1194,17 @@ function completeSale() {
         if (upi > 0) payments.push({ paymentMode: 'UPI', amount: parseFloat(upi.toFixed(2)), reference: upiReference });
     }
 
+    const fallbackName = ($('#newCustName').val() || '').trim() || null;
+    const fallbackPhone = ($('#newCustPhone').val() || '').trim() || null;
+    const searchText = ($('#customerSearch').val() || '').trim();
+    const normalizedSearch = searchText.replace(/[\s\-\+\(\)]/g, '');
+    const inferredSearchPhone = /^\d{4,}$/.test(normalizedSearch) ? normalizedSearch : null;
+    const inferredSearchName = inferredSearchPhone ? null : (searchText.length >= 2 ? searchText : null);
+
     const request = {
         customerId: selectedCustomer?.id || null,
+        customerName: selectedCustomer?.name || fallbackName || inferredSearchName,
+        customerPhone: selectedCustomer?.phone || fallbackPhone || inferredSearchPhone,
         items: saleItems.map(i => ({
             productId: i.productId,
             productName: i.productName,

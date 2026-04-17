@@ -1337,6 +1337,46 @@ body {
     color: var(--gray-700);
 }
 
+.sales-history-action {
+    border-radius: 10px;
+}
+
+.sales-history-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.sales-history-action-edit {
+    color: #2563eb;
+    border-color: rgba(37, 99, 235, 0.25);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.sales-history-action-edit:hover {
+    background: rgba(37, 99, 235, 0.10);
+    border-color: rgba(37, 99, 235, 0.40);
+}
+
+.sales-history-action-print {
+    color: #0f766e;
+    border-color: rgba(15, 118, 110, 0.25);
+    background: rgba(15, 118, 110, 0.04);
+}
+
+.sales-history-action-print:hover {
+    background: rgba(15, 118, 110, 0.10);
+    border-color: rgba(15, 118, 110, 0.40);
+}
+
+.sales-history-action-delete {
+    color: #dc2626;
+}
+
+.sales-history-action-delete:hover {
+    background: rgba(220, 38, 38, 0.08);
+    color: #b91c1c;
+}
+
 #customerSection #toggleNewCustomerForm {
     background: #1eaa69;
     color: #fff;

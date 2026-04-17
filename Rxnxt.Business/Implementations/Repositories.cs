@@ -10,40 +10,134 @@ namespace Rxnxt.Business.Implementations
     public class CustomerRepository : ICustomerRepository
     {
         private readonly PharmacyDbContext _context;
-        public CustomerRepository(PharmacyDbContext context) => _context = context;
+        private readonly IConfiguration _configuration;
+        public CustomerRepository(PharmacyDbContext context, IConfiguration configuration)
+        {
+            _context = context;
+            _configuration = configuration;
+        }
 
         public async Task<List<CustomerSearchResult>> SearchAsync(string query)
         {
-            query = query.Trim().ToLower();
-            return await _context.Customers
-                .Where(c => c.Name.ToLower().Contains(query)
-                          || c.Phone.Contains(query)
-                          || (c.Email != null && c.Email.ToLower().Contains(query)))
-                .Select(c => new CustomerSearchResult
-                {
-                    Id = c.Id,
-                    Name = c.Name,
-                    Phone = c.Phone,
-                    Email = c.Email,
-                    LoyaltyPoints = c.LoyaltyPoints
-                })
-                .Take(10)
-                .ToListAsync();
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
+            {
+                var q = query.Trim();
+                var term = q.ToLowerInvariant();
+                return await _context.CustomerMasters
+                    .AsNoTracking()
+                    .Where(c => c.ActiveStatus)
+                    .Where(c =>
+                        c.CustomerName.ToLower().Contains(term) ||
+                        (c.MobileNumber != null && c.MobileNumber.Contains(q)))
+                    .OrderBy(c => c.CustomerName)
+                    .Take(10)
+                    .Select(c => new CustomerSearchResult
+                    {
+                        Id = c.ID,
+                        Name = c.CustomerName,
+                        Phone = c.MobileNumber ?? string.Empty,
+                        Email = null,
+                        LoyaltyPoints = 0
+                    })
+                    .ToListAsync();
+            }
+
+            {
+                var term = query.Trim().ToLowerInvariant();
+                return await _context.Customers
+                    .AsNoTracking()
+                    .Where(c => c.Name.ToLower().Contains(term)
+                              || c.Phone.Contains(term)
+                              || (c.Email != null && c.Email.ToLower().Contains(term)))
+                    .Select(c => new CustomerSearchResult
+                    {
+                        Id = c.Id,
+                        Name = c.Name,
+                        Phone = c.Phone,
+                        Email = c.Email,
+                        LoyaltyPoints = c.LoyaltyPoints
+                    })
+                    .Take(10)
+                    .ToListAsync();
+            }
         }
 
-        public async Task<Customer?> GetByIdAsync(int id) =>
-            await _context.Customers.FindAsync(id);
+        public async Task<Customer?> GetByIdAsync(int id)
+        {
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
+            {
+                var row = await _context.CustomerMasters.AsNoTracking().FirstOrDefaultAsync(c => c.ID == id);
+                if (row == null) return null;
+                return new Customer
+                {
+                    Id = row.ID,
+                    Name = row.CustomerName,
+                    Phone = row.MobileNumber ?? string.Empty,
+                    Email = null,
+                    LoyaltyPoints = 0
+                };
+            }
+
+            return await _context.Customers.FindAsync(id);
+        }
 
         public async Task<Customer> CreateAsync(Customer customer)
         {
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
+            {
+                var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
+                var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
+                var now = DateTime.Now;
+
+                var name = (customer.Name ?? string.Empty).Trim();
+                if (name.Length > 300) name = name[..300];
+                var phone = string.IsNullOrWhiteSpace(customer.Phone) ? null : customer.Phone.Trim();
+
+                var row = new CustomerMasterRow
+                {
+                    UniqueID = Guid.NewGuid().ToString(),
+                    CustomerCode = "CUST-0",
+                    CustomerName = name,
+                    MobileNumber = phone,
+                    ActiveStatus = true,
+                    CreatedBy = createdBy,
+                    CreatedDate = now,
+                    ModifiedBy = null,
+                    ModifiedDate = null,
+                    TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
+                };
+
+                _context.CustomerMasters.Add(row);
+                await _context.SaveChangesAsync();
+                row.CustomerCode = $"CUST-{row.ID}";
+                await _context.SaveChangesAsync();
+
+                customer.Id = row.ID;
+                customer.Phone = row.MobileNumber ?? string.Empty;
+                customer.CreatedDate = now;
+                return customer;
+            }
+
             customer.CreatedDate = DateTime.Now;
             _context.Customers.Add(customer);
             await _context.SaveChangesAsync();
             return customer;
         }
 
-        public async Task<bool> PhoneExistsAsync(string phone) =>
-            await _context.Customers.AnyAsync(c => c.Phone == phone);
+        public async Task<bool> PhoneExistsAsync(string phone)
+        {
+            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+            if (salesIntegrationEnabled)
+            {
+                var p = phone.Trim();
+                return await _context.CustomerMasters.AsNoTracking().AnyAsync(c => c.MobileNumber == p);
+            }
+
+            return await _context.Customers.AnyAsync(c => c.Phone == phone);
+        }
     }
 
     public class MedicineRepository : IMedicineRepository
@@ -314,7 +408,7 @@ namespace Rxnxt.Business.Implementations
 
                     var now = DateTime.Now;
                     var headerUniqueId = Guid.NewGuid().ToString();
-                    var customerIdStr = request.CustomerId?.ToString() ?? "0";
+                    var customerIdStr = await UpsertIntegrationCustomerAsync(request, createdBy, tenantId, now);
                     var amountBeforeTax = subTotal - totalItemDiscount - request.AdditionalDiscount;
                     var discountAmount = totalItemDiscount + request.AdditionalDiscount;
                     var discountPerc = subTotal > 0 ? (discountAmount / subTotal) * 100 : 0;
@@ -423,6 +517,69 @@ namespace Rxnxt.Business.Implementations
                 await transaction.RollbackAsync();
                 return new SaleResult { Success = false, Message = $"Error completing sale: {ex.Message}" };
             }
+        }
+
+        private async Task<string> UpsertIntegrationCustomerAsync(CompleteSaleRequest request, string createdBy, string tenantId, DateTime now)
+        {
+            var name = (request.CustomerName ?? string.Empty).Trim();
+            if (name.Length > 300) name = name[..300];
+            var phone = (request.CustomerPhone ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(phone))
+            {
+                return "0";
+            }
+
+            CustomerMasterRow? existing = null;
+            if (!string.IsNullOrWhiteSpace(phone))
+            {
+                existing = await _context.CustomerMasters.FirstOrDefaultAsync(c => c.MobileNumber == phone);
+            }
+
+            if (existing != null)
+            {
+                var changed = false;
+                if (!string.IsNullOrWhiteSpace(name) && !string.Equals(existing.CustomerName, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.CustomerName = name;
+                    changed = true;
+                }
+                if (existing.ActiveStatus == false)
+                {
+                    existing.ActiveStatus = true;
+                    changed = true;
+                }
+                if (changed)
+                {
+                    existing.ModifiedBy = createdBy;
+                    existing.ModifiedDate = now;
+                    await _context.SaveChangesAsync();
+                }
+                return existing.UniqueID;
+            }
+
+            var uniqueId = Guid.NewGuid().ToString();
+            var customer = new CustomerMasterRow
+            {
+                UniqueID = uniqueId,
+                CustomerCode = "CUST-0",
+                CustomerName = string.IsNullOrWhiteSpace(name) ? "Walk-in" : name,
+                MobileNumber = string.IsNullOrWhiteSpace(phone) ? null : phone,
+                ActiveStatus = true,
+                CreatedBy = createdBy,
+                CreatedDate = now,
+                ModifiedBy = null,
+                ModifiedDate = null,
+                TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
+            };
+
+            _context.CustomerMasters.Add(customer);
+            await _context.SaveChangesAsync();
+
+            customer.CustomerCode = $"CUST-{customer.ID}";
+            await _context.SaveChangesAsync();
+
+            return customer.UniqueID;
         }
 
         public async Task<Sale?> GetByIdAsync(int id) =>
@@ -552,27 +709,70 @@ namespace Rxnxt.Business.Implementations
 
                 headerQuery = headerQuery.Where(h => h.ActiveStatus);
 
-                if (!string.IsNullOrWhiteSpace(term))
-                {
-                    headerQuery = headerQuery.Where(h =>
-                        (h.BillNo != null && h.BillNo.Contains(term)) ||
-                        (h.CustomerID != null && h.CustomerID.Contains(term))
-                    );
-                }
-
                 var headers = await headerQuery
                     .OrderByDescending(h => h.BillDate)
                     .ToListAsync();
 
+                var customerIdRawValues = headers
+                    .Select(h => (h.CustomerID ?? string.Empty).Trim())
+                    .Where(cid => !string.IsNullOrWhiteSpace(cid) && cid != "0")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var numericCustomerIds = customerIdRawValues
+                    .Select(cid => int.TryParse(cid, out var n) ? (int?)n : null)
+                    .Where(n => n.HasValue)
+                    .Select(n => n!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var customerMasters = (customerIdRawValues.Count == 0 && numericCustomerIds.Count == 0)
+                    ? new List<CustomerMasterRow>()
+                    : await _context.CustomerMasters
+                        .AsNoTracking()
+                        .Where(c => customerIdRawValues.Contains(c.UniqueID) || numericCustomerIds.Contains(c.ID))
+                        .ToListAsync();
+
+                var customerByUniqueId = customerMasters
+                    .Where(c => !string.IsNullOrWhiteSpace(c.UniqueID))
+                    .GroupBy(c => c.UniqueID.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                var customerById = customerMasters
+                    .GroupBy(c => c.ID)
+                    .ToDictionary(g => g.Key, g => g.First());
+
                 var sales = headers.Select(h =>
                 {
+                    var customerUniqueId = (h.CustomerID ?? string.Empty).Trim();
+                    Customer? customer = null;
+
+                    if (!string.IsNullOrWhiteSpace(customerUniqueId) && customerByUniqueId.TryGetValue(customerUniqueId, out var c))
+                    {
+                        customer = new Customer
+                        {
+                            Id = c.ID,
+                            Name = c.CustomerName,
+                            Phone = c.MobileNumber ?? string.Empty
+                        };
+                    }
+                    else if (int.TryParse(customerUniqueId, out var numericId) && customerById.TryGetValue(numericId, out var c2))
+                    {
+                        customer = new Customer
+                        {
+                            Id = c2.ID,
+                            Name = c2.CustomerName,
+                            Phone = c2.MobileNumber ?? string.Empty
+                        };
+                    }
+
                     return new Sale
                     {
                         Id = h.ID,
                         SaleDate = h.BillDate,
                         InvoiceNumber = h.BillNo,
                         CustomerId = null,
-                        Customer = null,
+                        Customer = customer,
                         SubTotal = h.AmountBeforeTax ?? 0,
                         ItemDiscount = h.DiscountAmount ?? 0,
                         AdditionalDiscount = 0,

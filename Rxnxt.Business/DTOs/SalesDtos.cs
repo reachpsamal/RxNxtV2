@@ -55,6 +55,8 @@ public sealed class StockSearchResult
 public class CompleteSaleRequest
 {
     public int? CustomerId { get; set; }
+    public string? CustomerName { get; set; }
+    public string? CustomerPhone { get; set; }
     public List<SaleItemRequest> Items { get; set; } = new();
     public decimal AdditionalDiscount { get; set; }
     public List<PaymentRequest> Payments { get; set; } = new();

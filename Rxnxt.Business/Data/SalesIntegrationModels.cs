@@ -192,3 +192,41 @@ public sealed class ProductMasterRow
     [StringLength(300)]
     public string? ProductName { get; set; }
 }
+
+[Table("CustomerMaster")]
+public sealed class CustomerMasterRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string CustomerCode { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(300)]
+    public string CustomerName { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    public string? MobileNumber { get; set; }
+
+    public bool ActiveStatus { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    public DateTime CreatedDate { get; set; }
+
+    [StringLength(50)]
+    public string? ModifiedBy { get; set; }
+
+    public DateTime? ModifiedDate { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+}

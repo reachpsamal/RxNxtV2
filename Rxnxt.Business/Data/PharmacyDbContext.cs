@@ -20,6 +20,7 @@ namespace Rxnxt.Business.Data
         public DbSet<SaleDetailRow> SaleDetails { get; set; }
         public DbSet<SalePaymentRow> SalePayments { get; set; }
         public DbSet<ProductMasterRow> ProductMasters { get; set; }
+        public DbSet<CustomerMasterRow> CustomerMasters { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -31,6 +32,7 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<SaleDetailRow>().ToTable("SaleDetail");
             modelBuilder.Entity<SalePaymentRow>().ToTable("SalePayment");
             modelBuilder.Entity<ProductMasterRow>().ToTable("ProductMaster");
+            modelBuilder.Entity<CustomerMasterRow>().ToTable("CustomerMaster");
 
             // Customer
             modelBuilder.Entity<Customer>(entity =>
