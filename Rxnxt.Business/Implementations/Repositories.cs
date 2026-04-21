@@ -407,41 +407,123 @@ namespace Rxnxt.Business.Implementations
                     var billType = _configuration["SalesIntegration:BillType"] ?? "Sale";
 
                     var now = DateTime.Now;
-                    var headerUniqueId = Guid.NewGuid().ToString();
-                    var customerIdStr = await UpsertIntegrationCustomerAsync(request, createdBy, tenantId, now);
+
+                    SaleHeaderRow? existingHeader = null;
+                    if (request.SaleId.HasValue && request.SaleId.Value > 0)
+                    {
+                        existingHeader = await _context.SaleHeaders.FirstOrDefaultAsync(h => h.ID == request.SaleId.Value);
+                        if (existingHeader == null)
+                        {
+                            return new SaleResult { Success = false, Message = "Sale not found for update." };
+                        }
+                    }
+
+                    var headerUniqueId = existingHeader?.UniqueID ?? Guid.NewGuid().ToString();
+
+                    string customerIdStr;
+                    if (request.CustomerId.HasValue && request.CustomerId.Value > 0)
+                    {
+                        customerIdStr = await _context.CustomerMasters
+                            .AsNoTracking()
+                            .Where(c => c.ID == request.CustomerId.Value)
+                            .Select(c => c.UniqueID)
+                            .FirstOrDefaultAsync() ?? "0";
+                    }
+                    else
+                    {
+                        customerIdStr = "0";
+                    }
+
+                    if ((string.IsNullOrWhiteSpace(customerIdStr) || customerIdStr == "0") && !string.IsNullOrWhiteSpace(request.CustomerPhone))
+                    {
+                        var phone = request.CustomerPhone.Trim();
+                        customerIdStr = await _context.CustomerMasters
+                            .AsNoTracking()
+                            .Where(c => c.MobileNumber == phone)
+                            .Select(c => c.UniqueID)
+                            .FirstOrDefaultAsync() ?? "0";
+                    }
+
+                    if ((string.IsNullOrWhiteSpace(customerIdStr) || customerIdStr == "0") && !string.IsNullOrWhiteSpace(request.CustomerName))
+                    {
+                        var name = request.CustomerName.Trim();
+                        customerIdStr = await _context.CustomerMasters
+                            .AsNoTracking()
+                            .Where(c => c.CustomerName == name)
+                            .Select(c => c.UniqueID)
+                            .FirstOrDefaultAsync() ?? "0";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(customerIdStr) || customerIdStr == "0")
+                    {
+                        customerIdStr = await UpsertIntegrationCustomerAsync(request, createdBy, tenantId, now);
+                    }
                     var amountBeforeTax = subTotal - totalItemDiscount - request.AdditionalDiscount;
                     var discountAmount = totalItemDiscount + request.AdditionalDiscount;
                     var discountPerc = subTotal > 0 ? (discountAmount / subTotal) * 100 : 0;
 
-                    var header = new SaleHeaderRow
+                    SaleHeaderRow header;
+                    if (existingHeader != null)
                     {
-                        UniqueID = headerUniqueId,
-                        BillNo = "INV-0",
-                        BillDate = now,
-                        BillType = billType,
-                        CustomerID = customerIdStr,
-                        Narration = null,
-                        BillAmount = grandTotal,
-                        TaxAmount = totalTax,
-                        DiscountAmount = discountAmount,
-                        ExtraAdd = 0,
-                        ExtraLess = 0,
-                        ActiveStatus = true,
-                        CreatedBy = createdBy,
-                        CreatedDate = now,
-                        ModifiedBy = null,
-                        ModifiedDate = null,
-                        TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
-                        DiscountPerc = discountPerc,
-                        AmountBeforeTax = amountBeforeTax,
-                        StoreId = string.IsNullOrWhiteSpace(storeId) ? null : storeId
-                    };
+                        header = existingHeader;
+                        header.BillDate = now;
+                        header.BillType = billType;
+                        header.CustomerID = customerIdStr;
+                        header.Narration = null;
+                        header.BillAmount = grandTotal;
+                        header.TaxAmount = totalTax;
+                        header.DiscountAmount = discountAmount;
+                        header.ExtraAdd = 0;
+                        header.ExtraLess = request.AdditionalDiscount;
+                        header.ActiveStatus = true;
+                        header.ModifiedBy = createdBy;
+                        header.ModifiedDate = now;
+                        header.TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId;
+                        header.DiscountPerc = discountPerc;
+                        header.AmountBeforeTax = amountBeforeTax;
+                        header.StoreId = string.IsNullOrWhiteSpace(storeId) ? null : storeId;
+                        await _context.SaveChangesAsync();
 
-                    _context.SaleHeaders.Add(header);
-                    await _context.SaveChangesAsync();
+                        var oldDetails = await _context.SaleDetails.Where(d => d.SaleID == headerUniqueId).ToListAsync();
+                        if (oldDetails.Count > 0) _context.SaleDetails.RemoveRange(oldDetails);
 
-                    header.BillNo = $"INV-{header.ID}";
-                    await _context.SaveChangesAsync();
+                        var oldPayments = await _context.SalePayments.Where(p => p.SaleId == headerUniqueId).ToListAsync();
+                        if (oldPayments.Count > 0) _context.SalePayments.RemoveRange(oldPayments);
+
+                        await _context.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        header = new SaleHeaderRow
+                        {
+                            UniqueID = headerUniqueId,
+                            BillNo = "INV-0",
+                            BillDate = now,
+                            BillType = billType,
+                            CustomerID = customerIdStr,
+                            Narration = null,
+                            BillAmount = grandTotal,
+                            TaxAmount = totalTax,
+                            DiscountAmount = discountAmount,
+                            ExtraAdd = 0,
+                            ExtraLess = request.AdditionalDiscount,
+                            ActiveStatus = true,
+                            CreatedBy = createdBy,
+                            CreatedDate = now,
+                            ModifiedBy = null,
+                            ModifiedDate = null,
+                            TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
+                            DiscountPerc = discountPerc,
+                            AmountBeforeTax = amountBeforeTax,
+                            StoreId = string.IsNullOrWhiteSpace(storeId) ? null : storeId
+                        };
+
+                        _context.SaleHeaders.Add(header);
+                        await _context.SaveChangesAsync();
+
+                        header.BillNo = $"INV-{header.ID}";
+                        await _context.SaveChangesAsync();
+                    }
 
                     foreach (var item in request.Items)
                     {
@@ -473,8 +555,8 @@ namespace Rxnxt.Business.Implementations
                             BaseUOMID = null,
                             SaleUOMID = item.UomName,
                             SaleUOMQty = item.Quantity,
-                            ItemDiscPerc = Math.Round(item.DiscountPercent, 0),
-                            ItemDiscAmount = Math.Round(discountAmt, 0),
+                            ItemDiscPerc = Math.Round(item.DiscountPercent, 2),
+                            ItemDiscAmount = Math.Round(discountAmt, 2),
                             TaxableAmount = taxable,
                             CGSTAmount = halfTax,
                             SGSTAmount = halfTax,
@@ -505,7 +587,7 @@ namespace Rxnxt.Business.Implementations
                     {
                         Success = true,
                         Message = "Sale completed successfully!",
-                        SaleId = null,
+                        SaleId = header.ID,
                         InvoiceNumber = header.BillNo
                     };
                 }
@@ -596,6 +678,34 @@ namespace Rxnxt.Business.Implementations
             var header = await _context.SaleHeaders.AsNoTracking().FirstOrDefaultAsync(h => h.ID == id);
             if (header == null) return null;
 
+            var customerIdRaw = (header.CustomerID ?? string.Empty).Trim();
+            Customer? customer = null;
+            if (!string.IsNullOrWhiteSpace(customerIdRaw) && customerIdRaw != "0")
+            {
+                var cm = await _context.CustomerMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.UniqueID == customerIdRaw);
+
+                if (cm == null && int.TryParse(customerIdRaw, out var numericId))
+                {
+                    cm = await _context.CustomerMasters
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.ID == numericId);
+                }
+
+                if (cm != null)
+                {
+                    customer = new Customer
+                    {
+                        Id = cm.ID,
+                        Name = cm.CustomerName,
+                        Phone = cm.MobileNumber ?? string.Empty,
+                        Email = null,
+                        LoyaltyPoints = 0
+                    };
+                }
+            }
+
             var details = await _context.SaleDetails
                 .AsNoTracking()
                 .Where(d => d.SaleID == header.UniqueID)
@@ -626,12 +736,12 @@ namespace Rxnxt.Business.Implementations
             var sale = new Sale
             {
                 Id = header.ID,
-                CustomerId = null,
-                Customer = null,
+                CustomerId = customer != null && customer.Id > 0 ? customer.Id : null,
+                Customer = customer,
                 SaleDate = header.BillDate,
                 SubTotal = header.AmountBeforeTax ?? 0,
-                ItemDiscount = header.DiscountAmount ?? 0,
-                AdditionalDiscount = 0,
+                ItemDiscount = 0,
+                AdditionalDiscount = header.ExtraLess ?? 0,
                 GrandTotal = header.BillAmount ?? 0,
                 PaymentStatus = header.ActiveStatus ? "Completed" : "Cancelled",
                 InvoiceNumber = header.BillNo,
@@ -668,6 +778,8 @@ namespace Rxnxt.Business.Implementations
                     Total = d.ItemTotal ?? 0
                 });
             }
+
+            sale.ItemDiscount = sale.SaleItems.Sum(i => i.DiscountAmount);
 
             foreach (var p in payments)
             {
@@ -765,17 +877,26 @@ namespace Rxnxt.Business.Implementations
                             Phone = c2.MobileNumber ?? string.Empty
                         };
                     }
+                    else
+                    {
+                        customer = new Customer
+                        {
+                            Id = 0,
+                            Name = string.IsNullOrWhiteSpace(customerUniqueId) || customerUniqueId == "0" ? "Walk-in" : "Walk-in",
+                            Phone = string.Empty
+                        };
+                    }
 
                     return new Sale
                     {
                         Id = h.ID,
                         SaleDate = h.BillDate,
                         InvoiceNumber = h.BillNo,
-                        CustomerId = null,
+                        CustomerId = customer != null && customer.Id > 0 ? customer.Id : null,
                         Customer = customer,
                         SubTotal = h.AmountBeforeTax ?? 0,
-                        ItemDiscount = h.DiscountAmount ?? 0,
-                        AdditionalDiscount = 0,
+                        ItemDiscount = Math.Max(0, (h.DiscountAmount ?? 0) - (h.ExtraLess ?? 0)),
+                        AdditionalDiscount = h.ExtraLess ?? 0,
                         GrandTotal = h.BillAmount ?? 0,
                         PaymentStatus = h.ActiveStatus ? "Completed" : "Cancelled",
                         SaleItems = new List<SaleItem>(),

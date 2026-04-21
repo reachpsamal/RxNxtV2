@@ -7,6 +7,7 @@ let selectedCustomer = null;
 let saleItems = [];
 let selectedPaymentMethod = 'Cash';
 let currentBatchInfo = null;
+let editingSaleId = null;
 let selectedUnitType = 'PCS';
 let debounceTimer = null;
 let suppressBatchAutoSelectUntil = 0;
@@ -190,7 +191,15 @@ function selectCustomer(id) {
             $('#selectedCustomerCard').html(html).show();
             const json = $('#selectedCustomerCard .customer-card').attr('data-customer-json');
             if (json) {
-                try { selectedCustomer = JSON.parse(json); } catch { selectedCustomer = null; }
+                try {
+                    const obj = JSON.parse(json);
+                    selectedCustomer = obj ? {
+                        id: obj.id ?? obj.Id ?? null,
+                        name: obj.name ?? obj.Name ?? '',
+                        phone: obj.phone ?? obj.Phone ?? '',
+                        email: obj.email ?? obj.Email ?? null
+                    } : null;
+                } catch { selectedCustomer = null; }
             }
             $('#customerDropdown').removeClass('show').empty();
             $('#customerSearch').val('').hide();
@@ -316,7 +325,15 @@ function saveNewCustomer() {
             $('#selectedCustomerCard').html(html).show();
             const json = $('#selectedCustomerCard .customer-card').attr('data-customer-json');
             if (json) {
-                try { selectedCustomer = JSON.parse(json); } catch { selectedCustomer = null; }
+                try {
+                    const obj = JSON.parse(json);
+                    selectedCustomer = obj ? {
+                        id: obj.id ?? obj.Id ?? null,
+                        name: obj.name ?? obj.Name ?? '',
+                        phone: obj.phone ?? obj.Phone ?? '',
+                        email: obj.email ?? obj.Email ?? null
+                    } : null;
+                } catch { selectedCustomer = null; }
             }
             $('#customerSearch').val('').hide();
             $('#toggleNewCustomerForm').hide();
@@ -1202,6 +1219,7 @@ function completeSale() {
     const inferredSearchName = inferredSearchPhone ? null : (searchText.length >= 2 ? searchText : null);
 
     const request = {
+        saleId: editingSaleId || null,
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || fallbackName || inferredSearchName,
         customerPhone: selectedCustomer?.phone || fallbackPhone || inferredSearchPhone,
@@ -1246,6 +1264,7 @@ function startNewSale() {
     currentBatchInfo = null;
     selectedUnitType = 'PCS';
     selectedPaymentMethod = 'Cash';
+    editingSaleId = null;
 
     // Reset UI
     $('#selectedCustomerCard').hide().empty();
@@ -1339,6 +1358,8 @@ function loadSaleForEdit(saleId) {
         })
         .then(data => {
             if (!data) throw new Error('Sale data missing');
+
+            editingSaleId = parseInt(data.saleId || saleId, 10) || null;
 
             // Reset current draft
             selectedCustomer = null;

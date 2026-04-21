@@ -130,10 +130,10 @@ public sealed class SaleDetailRow
     [Column(TypeName = "decimal(18,2)")]
     public decimal? SaleUOMQty { get; set; }
 
-    [Column(TypeName = "decimal(18,0)")]
+    [Column(TypeName = "decimal(18,2)")]
     public decimal? ItemDiscPerc { get; set; }
 
-    [Column(TypeName = "decimal(18,0)")]
+    [Column(TypeName = "decimal(18,2)")]
     public decimal? ItemDiscAmount { get; set; }
 
     [Column(TypeName = "decimal(18,2)")]
