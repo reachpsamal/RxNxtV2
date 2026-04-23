@@ -8,6 +8,7 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <input type="hidden" id="serverSaleSuccessInvoice" value="@(TempData["SaleSuccessInvoice"] ?? string.Empty)">
+<input type="hidden" id="serverSaleSuccessId" value="@(TempData["SaleSuccessId"] ?? string.Empty)">
 <input type="hidden" id="serverSaleError" value="@(TempData["SaleError"] ?? string.Empty)">
 
 <!-- Success Overlay -->
@@ -21,6 +22,9 @@
             Your transaction has been processed successfully.
             <span class="success-invoice" id="successInvoice"></span>
         </p>
+        <button class="btn-success-pharmacy" id="printBillBtn" type="button" style="width:100%; justify-content:center; display:none; margin-bottom:10px;" onclick="printLastBill()">
+            <i class="bi bi-printer"></i> Print Bill
+        </button>
         <button class="btn-primary-pharmacy" onclick="startNewSale()" style="width:100%; justify-content:center;">
             <i class="bi bi-plus-circle"></i> Start New Sale
         </button>

@@ -8,6 +8,7 @@ let saleItems = [];
 let selectedPaymentMethod = 'Cash';
 let currentBatchInfo = null;
 let editingSaleId = null;
+let isPrefillingEditSale = false;
 let selectedUnitType = 'PCS';
 let debounceTimer = null;
 let suppressBatchAutoSelectUntil = 0;
@@ -16,8 +17,6 @@ let lastBatchQuickAdd = { key: null, at: 0 };
 let inFlightBatchAdds = new Map();
 
 const MVC_BASE = '/Sales';
-
-const FIXED_TAX_PERCENT = 5;
 
 const PREFETCH_STOCKS = Array.isArray(window.__prefetchStocks) ? window.__prefetchStocks : [];
 
@@ -651,10 +650,12 @@ function recalculateItem(index) {
 
     const lineTotal = price * qty;
     item.discountAmount = lineTotal * discPercent / 100;
-    const taxable = Math.max(0, lineTotal - (parseFloat(item.discountAmount) || 0));
+    const afterDisc = Math.max(0, lineTotal - (parseFloat(item.discountAmount) || 0));
     item.taxPercent = taxPercent;
-    item.taxAmount = taxable * taxPercent / 100;
-    item.total = taxable + (parseFloat(item.taxAmount) || 0);
+    item.baseTotal = afterDisc;
+    const includedTax = taxPercent > 0 ? (afterDisc * (taxPercent / (100 + taxPercent))) : 0;
+    item.taxAmount = includedTax;
+    item.total = afterDisc;
 }
 
 function computeTaxBreakupBySlab() {
@@ -664,19 +665,21 @@ function computeTaxBreakupBySlab() {
         18: { cgst: 0, sgst: 0 }
     };
 
+    const additionalDiscount = getAdditionalDiscountAmount();
+    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
+
     saleItems.forEach(item => {
         const gst = parseFloat(item.taxPercent) || 0;
         if (!(gst === 5 || gst === 12 || gst === 18)) return;
 
-        const price = parseFloat(item.price) || 0;
-        const qty = parseFloat(item.quantity) || 0;
-        const lineTotal = price * qty;
-        const discAmt = parseFloat(item.discountAmount) || 0;
-        const taxable = Math.max(0, lineTotal - discAmt);
+        const baseAfterDisc = parseFloat(item.baseTotal) || 0;
+        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
+        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
+        const includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+        const halfTax = includedTax / 2;
 
-        const half = gst / 2;
-        const cgstAmt = taxable * half / 100;
-        const sgstAmt = taxable * half / 100;
+        const cgstAmt = halfTax;
+        const sgstAmt = halfTax;
 
         result[gst].cgst += cgstAmt;
         result[gst].sgst += sgstAmt;
@@ -961,23 +964,36 @@ function recalculateBill() {
     let subTotal = 0;
     let itemDiscount = 0;
     let taxTotal = 0;
+    let grandTotal = 0;
 
     saleItems.forEach(item => {
         const price = parseFloat(item.price) || 0;
         const qty = parseFloat(item.quantity) || 0;
         const discAmt = parseFloat(item.discountAmount) || 0;
-        const taxAmt = parseFloat(item.taxAmount) || 0;
 
         subTotal += price * qty;
         itemDiscount += discAmt;
-        taxTotal += taxAmt;
     });
 
     syncAdditionalDiscountAmountFromPercent();
     const additionalDiscount = getAdditionalDiscountAmount();
-    const unroundedGrandTotal = subTotal - itemDiscount - additionalDiscount + taxTotal;
 
-    const baseGrandTotal = Math.max(0, unroundedGrandTotal);
+    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
+    saleItems.forEach(item => {
+        const gst = parseFloat(item.taxPercent) || 0;
+        const baseAfterDisc = parseFloat(item.baseTotal) || 0;
+        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
+        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
+        const includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+
+        item.taxAmount = includedTax;
+        item.total = afterAllDiscounts;
+
+        taxTotal += includedTax;
+        grandTotal += afterAllDiscounts;
+    });
+
+    const baseGrandTotal = Math.max(0, grandTotal);
 
     const rounded = roundToNearestRupee(baseGrandTotal);
     const roundOff = rounded - baseGrandTotal;
@@ -1014,12 +1030,21 @@ function updatePaymentAmount(grandTotal) {
     } else if (selectedPaymentMethod === 'UPI') {
         $('#upiAmount').val(grandTotal.toFixed(2));
     } else if (selectedPaymentMethod === 'Split') {
+        if (isPrefillingEditSale) {
+            const c = parseFloat($('#splitCash').val()) || 0;
+            const ca = parseFloat($('#splitCard').val()) || 0;
+            const u = parseFloat($('#splitUpi').val()) || 0;
+            const rem = Math.max(0, grandTotal - c - ca - u);
+            $('#splitRemaining').text(formatCurrency(rem));
+            return;
+        }
         syncSplitPayments();
     }
 }
 
 // ============ PAYMENT ============
-function selectPaymentMethod(method) {
+function selectPaymentMethod(method, options) {
+    const opts = options || {};
     selectedPaymentMethod = method;
     $('.payment-method-card').removeClass('selected');
     $(`#pm${method}`).addClass('selected');
@@ -1028,7 +1053,10 @@ function selectPaymentMethod(method) {
     $('.payment-detail-form').removeClass('show');
     $(`#payment${method}`).addClass('show');
 
-    if (method === 'Split') {
+    // Split cascade expects UPI to be dependent-only.
+    $('#splitUpi').prop('readonly', method === 'Split');
+
+    if (method === 'Split' && !opts.skipInitSplit) {
         initSplitPayments();
     }
 
@@ -1038,22 +1066,28 @@ function selectPaymentMethod(method) {
 function getGrandTotal() {
     let subTotal = 0;
     let itemDiscount = 0;
-    let taxTotal = 0;
+    let grandTotal = 0;
     saleItems.forEach(item => {
         const price = parseFloat(item.price) || 0;
         const qty = parseFloat(item.quantity) || 0;
         const discAmt = parseFloat(item.discountAmount) || 0;
-        const taxAmt = parseFloat(item.taxAmount) || 0;
 
         subTotal += price * qty;
         itemDiscount += discAmt;
-        taxTotal += taxAmt;
     });
     // Percent-driven additional discount (source of truth is %)
     syncAdditionalDiscountAmountFromPercent();
     const additionalDiscount = getAdditionalDiscountAmount();
-    const unroundedGrandTotal = subTotal - itemDiscount - additionalDiscount + taxTotal;
-    const baseGrandTotal = Math.max(0, unroundedGrandTotal);
+
+    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
+    saleItems.forEach(item => {
+        const baseAfterDisc = parseFloat(item.baseTotal) || 0;
+        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
+        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
+        grandTotal += afterAllDiscounts;
+    });
+
+    const baseGrandTotal = Math.max(0, grandTotal);
     // Bill Settlement always shows rounded grand total; keep payments (Cash/Card/UPI/Split) aligned with it.
     return roundToNearestRupee(baseGrandTotal);
 }
@@ -1104,22 +1138,31 @@ function syncSplitPayments(changedField, normalizeChangedField) {
 
     let cash = parseFloat($('#splitCash').val());
     let card = parseFloat($('#splitCard').val());
+    let upi = parseFloat($('#splitUpi').val());
     if (Number.isNaN(cash)) cash = 0;
     if (Number.isNaN(card)) card = 0;
+    if (Number.isNaN(upi)) upi = 0;
 
     cash = Math.max(0, cash);
     if (cash > grandTotal) cash = grandTotal;
 
+    card = Math.max(0, card);
+    if (card > grandTotal) card = grandTotal;
+
+    upi = Math.max(0, upi);
+    if (upi > grandTotal) upi = grandTotal;
+
     const remainingAfterCash = Math.max(0, grandTotal - cash);
     if (changedField === 'cash' || !changedField) {
         card = remainingAfterCash;
+        upi = 0;
     } else {
-        card = Math.max(0, card);
+        // card edited -> upi becomes remaining
         if (card > remainingAfterCash) card = remainingAfterCash;
+        upi = Math.max(0, grandTotal - cash - card);
     }
 
-    const remaining = Math.max(0, grandTotal - cash - card);
-    const upi = remaining;
+    const remaining = Math.max(0, grandTotal - cash - card - upi);
 
     // Avoid fighting the user's typing: only normalize the field they are editing on blur/change.
     if (normalizeChangedField) {
@@ -1233,7 +1276,7 @@ function completeSale() {
             quantity: i.quantity,
             unitType: i.unitType,
             discountPercent: i.discountPercent,
-            taxPercent: 5
+            taxPercent: parseFloat(i.taxPercent) || 0
         })),
         additionalDiscount: parseFloat($('#additionalDiscount').val()) || 0,
         payments: payments
@@ -1248,6 +1291,8 @@ function completeSale() {
 // Show server result after redirect
 $(function () {
     const invoice = ($('#serverSaleSuccessInvoice').val() || '').toString();
+    const saleIdRaw = ($('#serverSaleSuccessId').val() || '').toString();
+    const saleId = parseInt(saleIdRaw, 10) || null;
     const err = ($('#serverSaleError').val() || '').toString();
     if (err) {
         showToast(err, 'error');
@@ -1255,8 +1300,19 @@ $(function () {
     if (invoice) {
         $('#successInvoice').text(`#${invoice}`);
         $('#successOverlay').addClass('show');
+
+        window.__lastCompletedSaleId = saleId;
+        if (saleId && $('#printBillBtn').length) {
+            $('#printBillBtn').show();
+        }
     }
 });
+
+function printLastBill() {
+    const saleId = window.__lastCompletedSaleId;
+    if (!saleId) return;
+    window.open(`${MVC_BASE}/Print?id=${encodeURIComponent(saleId)}`, '_blank');
+}
 
 function startNewSale() {
     selectedCustomer = null;
@@ -1265,6 +1321,7 @@ function startNewSale() {
     selectedUnitType = 'PCS';
     selectedPaymentMethod = 'Cash';
     editingSaleId = null;
+    window.__lastCompletedSaleId = null;
 
     // Reset UI
     $('#selectedCustomerCard').hide().empty();
@@ -1293,6 +1350,9 @@ function startNewSale() {
 
     $('#completeSaleBtn').prop('disabled', true).html('<i class="bi bi-check-circle"></i> Complete Sale');
     $('#successOverlay').removeClass('show');
+    if ($('#printBillBtn').length) {
+        $('#printBillBtn').hide();
+    }
 
     updateCompleteSaleBtn();
     switchMedicineTab('direct');
@@ -1359,6 +1419,8 @@ function loadSaleForEdit(saleId) {
         .then(data => {
             if (!data) throw new Error('Sale data missing');
 
+            isPrefillingEditSale = true;
+
             editingSaleId = parseInt(data.saleId || saleId, 10) || null;
 
             // Reset current draft
@@ -1401,6 +1463,7 @@ function loadSaleForEdit(saleId) {
                 const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
                 const resolvedName = readStockProductName(stock) || '';
                 const resolvedUom = readStockUom(stock) || 'PCS';
+                const resolvedTaxPercent = detectGstPercentFromTaxName(readStockTaxName(stock));
                 const item = {
                     productId: i.productId,
                     productName: (i.productName && String(i.productName).trim()) ? i.productName : resolvedName,
@@ -1411,13 +1474,15 @@ function loadSaleForEdit(saleId) {
                     unitType: i.unitType || (i.uomName || 'PCS'),
                     price: parseFloat(i.price) || 0,
                     discountPercent: parseFloat(i.discountPercent) || 0,
-                    discountAmount: parseFloat(i.discountAmount) || 0,
-                    taxPercent: parseFloat(i.taxPercent) || 0,
-                    taxAmount: parseFloat(i.taxAmount) || 0,
-                    total: parseFloat(i.total) || 0,
+                    discountAmount: 0,
+                    taxPercent: (parseFloat(i.taxPercent) || 0) || resolvedTaxPercent,
+                    taxAmount: 0,
+                    baseTotal: 0,
+                    total: 0,
                     availableQty: i.availableQty
                 };
                 saleItems.push(item);
+                recalculateItem(saleItems.length - 1);
             });
 
             // Additional discount
@@ -1431,7 +1496,7 @@ function loadSaleForEdit(saleId) {
             // Payment prefill
             const p = data.payment || {};
             const method = (p.method || 'Cash').toString();
-            selectPaymentMethod(method);
+            selectPaymentMethod(method, { skipInitSplit: method === 'Split' });
 
             // Cash
             if (p.cashReceived !== undefined && p.cashReceived !== null) {
@@ -1468,15 +1533,23 @@ function loadSaleForEdit(saleId) {
                 $('#splitUpiRefNo').val(p.splitUpiRefNo);
             }
             if (method === 'Split') {
-                syncSplitPayments(null, true);
+                const gt = getGrandTotal();
+                const c = parseFloat($('#splitCash').val()) || 0;
+                const ca = parseFloat($('#splitCard').val()) || 0;
+                const u = parseFloat($('#splitUpi').val()) || 0;
+                const rem = Math.max(0, gt - c - ca - u);
+                $('#splitRemaining').text(formatCurrency(rem));
             }
 
             renderSaleItems();
             recalculateBill();
             updateCompleteSaleBtn();
             switchMedicineTab('batch');
+
+            isPrefillingEditSale = false;
         })
         .catch(err => {
+            isPrefillingEditSale = false;
             showToast(err?.message || 'Failed to load sale', 'error');
         });
 }

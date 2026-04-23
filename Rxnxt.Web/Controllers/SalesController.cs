@@ -307,6 +307,7 @@ namespace Rxnxt.Web.Controllers
             }
 
             TempData["SaleSuccessInvoice"] = result.InvoiceNumber ?? string.Empty;
+            TempData["SaleSuccessId"] = result.SaleId?.ToString() ?? string.Empty;
             return RedirectToAction(nameof(Index));
         }
 

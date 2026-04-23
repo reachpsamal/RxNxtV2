@@ -359,6 +359,8 @@ namespace Rxnxt.Business.Implementations
                 decimal totalTax = 0;
                 var saleItems = new List<SaleItem>();
 
+                var lineBases = new List<(SaleItemRequest Item, decimal Gross, decimal ItemDisc, decimal AfterItemDisc)>();
+
                 foreach (var item in request.Items)
                 {
                     if (item.Quantity <= 0)
@@ -370,13 +372,15 @@ namespace Rxnxt.Business.Implementations
                     decimal unitPrice = item.UnitPrice;
                     decimal lineTotal = unitPrice * item.Quantity;
                     decimal discountAmt = lineTotal * (item.DiscountPercent / 100);
-                    decimal taxable = lineTotal - discountAmt;
-                    decimal taxAmt = taxable * (item.TaxPercent / 100);
-                    decimal total = taxable + taxAmt;
+                    decimal afterItemDisc = Math.Max(0, lineTotal - discountAmt);
+                    decimal includedTax = item.TaxPercent > 0 ? (afterItemDisc * (item.TaxPercent / (100 + item.TaxPercent))) : 0;
+                    decimal total = afterItemDisc;
 
                     subTotal += lineTotal;
                     totalItemDiscount += discountAmt;
-                    totalTax += taxAmt;
+                    totalTax += includedTax;
+
+                    lineBases.Add((item, lineTotal, discountAmt, afterItemDisc));
 
                     saleItems.Add(new SaleItem
                     {
@@ -391,12 +395,32 @@ namespace Rxnxt.Business.Implementations
                         DiscountPercent = item.DiscountPercent,
                         DiscountAmount = discountAmt,
                         TaxPercent = item.TaxPercent,
-                        TaxAmount = taxAmt,
+                        TaxAmount = includedTax,
                         Total = total
                     });
                 }
 
-                decimal grandTotal = subTotal - totalItemDiscount - request.AdditionalDiscount + totalTax;
+                var baseSum = lineBases.Sum(x => x.AfterItemDisc);
+                var additionalDiscount = request.AdditionalDiscount;
+                if (additionalDiscount < 0) additionalDiscount = 0;
+
+                decimal grandTotal = 0;
+                decimal totalTaxAfterAllDiscounts = 0;
+
+                for (var i = 0; i < saleItems.Count; i++)
+                {
+                    var baseAfterItemDisc = lineBases[i].AfterItemDisc;
+                    var share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterItemDisc / baseSum)) : 0;
+                    var afterAllDiscounts = Math.Max(0, baseAfterItemDisc - share);
+                    var gst = saleItems[i].TaxPercent;
+                    var includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+                    saleItems[i].TaxAmount = includedTax;
+                    saleItems[i].Total = afterAllDiscounts;
+                    totalTaxAfterAllDiscounts += includedTax;
+                    grandTotal += afterAllDiscounts;
+                }
+
+                totalTax = totalTaxAfterAllDiscounts;
 
                 var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
                 if (salesIntegrationEnabled)
@@ -458,15 +482,15 @@ namespace Rxnxt.Business.Implementations
                     {
                         customerIdStr = await UpsertIntegrationCustomerAsync(request, createdBy, tenantId, now);
                     }
-                    var amountBeforeTax = subTotal - totalItemDiscount - request.AdditionalDiscount;
-                    var discountAmount = totalItemDiscount + request.AdditionalDiscount;
+
+                    var amountBeforeTax = grandTotal - totalTax;
+                    var discountAmount = totalItemDiscount + additionalDiscount;
                     var discountPerc = subTotal > 0 ? (discountAmount / subTotal) * 100 : 0;
 
                     SaleHeaderRow header;
                     if (existingHeader != null)
                     {
                         header = existingHeader;
-                        header.BillDate = now;
                         header.BillType = billType;
                         header.CustomerID = customerIdStr;
                         header.Narration = null;
@@ -525,16 +549,23 @@ namespace Rxnxt.Business.Implementations
                         await _context.SaveChangesAsync();
                     }
 
-                    foreach (var item in request.Items)
-                    {
-                        decimal unitPrice = item.UnitPrice;
-                        decimal lineTotal = unitPrice * item.Quantity;
-                        decimal discountAmt = lineTotal * (item.DiscountPercent / 100);
-                        decimal taxable = lineTotal - discountAmt;
-                        decimal taxAmt = taxable * (item.TaxPercent / 100);
-                        decimal total = taxable + taxAmt;
+                    var detailBaseSum = baseSum;
 
-                        var halfTax = taxAmt / 2;
+                    foreach (var tuple in lineBases)
+                    {
+                        var item = tuple.Item;
+                        decimal unitPrice = item.UnitPrice;
+                        decimal lineTotal = tuple.Gross;
+                        decimal discountAmt = tuple.ItemDisc;
+                        decimal afterItemDisc = tuple.AfterItemDisc;
+                        var share = (additionalDiscount > 0 && detailBaseSum > 0) ? (additionalDiscount * (afterItemDisc / detailBaseSum)) : 0;
+                        var afterAllDiscounts = Math.Max(0, afterItemDisc - share);
+                        var gst = item.TaxPercent;
+                        decimal includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+                        decimal taxable = afterAllDiscounts - includedTax;
+                        decimal total = afterAllDiscounts;
+
+                        var halfTax = includedTax / 2;
 
                         _context.SaleDetails.Add(new SaleDetailRow
                         {
@@ -561,7 +592,7 @@ namespace Rxnxt.Business.Implementations
                             CGSTAmount = halfTax,
                             SGSTAmount = halfTax,
                             IGSTAmount = 0,
-                            TotalTaxAmount = taxAmt,
+                            TotalTaxAmount = includedTax,
                             ItemTotal = total,
                             TaxPerc = item.TaxPercent
                         });
@@ -709,6 +740,7 @@ namespace Rxnxt.Business.Implementations
             var details = await _context.SaleDetails
                 .AsNoTracking()
                 .Where(d => d.SaleID == header.UniqueID)
+                .OrderBy(d => d.ID)
                 .ToListAsync();
 
             var productIds = details

@@ -10,12 +10,41 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Print - @Model.InvoiceNumber</title>
+    <title>Print - @(Model?.InvoiceNumber ?? string.Empty)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { padding: 24px; font-family: Arial, sans-serif; }
+        @@page { size: A4; margin: 8mm; }
+        body { padding: 0; font-family: Arial, sans-serif; }
         .muted { color: #666; }
+        hr {
+  margin: 6px 0;         /* change as you need */
+  opacity: 1;
+  border-top: 1px solid #000;
+}
         .mono { font-variant-numeric: tabular-nums; }
+        .page { display: flex; flex-direction: column; min-height: calc(297mm - 16mm); }
+        .copy-half { flex: 1 1 0; overflow: hidden; padding: 0; }
+        .copy-full { padding: 0; }
+        .copy-label { font-size: 12px; font-weight: 700; letter-spacing: 0.4px; }
+        .hdr-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; position: relative; }
+        .hdr-left h3 { margin: 0; font-size: 18px; }
+        .hdr-left .muted { font-size: 12px; line-height: 1.2; }
+        .hdr-row div { font-size: 12px; line-height: 1.25; }
+        .hdr-grid { display: inline-grid; grid-template-columns: 1fr 260px; gap: 2px 12px; max-width: 560px; width: 100%; }
+        .hdr-cell-right { text-align: left; }
+        .copy-label-float { position: absolute; right: 0; top: 0; text-align: right; }
+        .hdr-row strong { font-weight: 700; }
+        .summary-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-end; }
+        .cut-line { border-top: 1px dashed #000; margin: 6mm 0; }
+        .page-break { break-before: page; page-break-before: always; }
+        .hdr-row, .summary-row { break-inside: avoid; page-break-inside: avoid; }
+        .table-sm > :not(caption) > * > * { padding: 0.15rem 0.25rem; }
+        .table thead th { font-size: 10px; }
+        .table tbody td { font-size: 10px; }
+        .summary-row div, .summary-row span {
+            font-size: 10px;
+            line-height: 1.2;
+            }
         @@media print {
             .no-print { display: none !important; }
             body { padding: 0; }
@@ -28,87 +57,364 @@
         <button class="btn btn-outline-secondary" onclick="window.close()">Close</button>
     </div>
 
-    <h3 style="margin:0;">Invoice</h3>
-    <div class="muted">@Model.InvoiceNumber</div>
-    <div class="muted">@Model.SaleDate.ToString("dd-MMM-yyyy hh:mm tt")</div>
+    @{
+        const int maxRowsPerHalfPage = 8;
+        var useTwoCopiesOnOnePage = (Model?.SaleItems?.Count ?? 0) <= maxRowsPerHalfPage;
+        var paymentModes = (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
+            .Select(p => (p?.PaymentMode ?? string.Empty).Trim())
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var paymentModeText = paymentModes.Count == 0 ? "-" : string.Join("+", paymentModes);
 
-    <hr />
+        var taxableAmt = Model?.SubTotal ?? 0m;
+        var itemDiscountAmt = Model?.ItemDiscount ?? 0m;
+        var additionalDiscountAmt = Model?.AdditionalDiscount ?? 0m;
+        var taxAmt = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>()).Sum(i => i.TaxAmount);
+        var netGrandTotal = Model?.GrandTotal ?? 0m;
+        var roundedGrandTotal = Math.Round(netGrandTotal, 0, MidpointRounding.AwayFromZero);
+        var roundOffAmt = roundedGrandTotal - netGrandTotal;
 
-    <div style="margin-bottom:12px;">
-        <div><strong>Customer:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
-        @if (Model.Customer != null)
-        {
-            <div class="muted">@Model.Customer.Phone</div>
-        }
-    </div>
-
-    <table class="table table-sm">
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th>Batch</th>
-                <th class="text-end">Qty</th>
-                <th class="text-end">Price</th>
-                <th class="text-end">Disc</th>
-                <th class="text-end">Tax</th>
-                <th class="text-end">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var i in Model.SaleItems)
+        var paymentsText = string.Join(", ", (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
+            .Where(p => p != null)
+            .Select(p =>
             {
-                <tr>
-                    <td>
-                        <div><strong>@i.ProductName</strong></div>
-                        <div class="muted">@i.UomName</div>
-                    </td>
-                    <td>
-                        <div>@i.BatchNumber</div>
-                        <div class="muted">Exp: @i.ExpiryDate.ToString("dd-MMM-yyyy")</div>
-                    </td>
-                    <td class="text-end mono">@i.Quantity</td>
-                    <td class="text-end mono">@i.Price.ToString("0.00")</td>
-                    <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
-                    <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
-                    <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                var mode = (p!.PaymentMode ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(mode)) mode = "Payment";
+                var amountText = $"₹ {p.Amount:0.00}";
+                var referenceText = string.IsNullOrWhiteSpace(p.Reference) ? string.Empty : $" ({p.Reference})";
+                return $"{mode} {amountText}{referenceText}";
+            }));
+    }
 
-    <hr />
+    @if (useTwoCopiesOnOnePage)
+    {
+    <div class="page">
+        <div class="copy-half" id="customerCopy">
+            <div class="hdr-row">
+                <div class="copy-label copy-label-float">Customer Copy</div>
+                <div class="hdr-grid">
+                    <div><strong>Invoice No:</strong> @(Model?.InvoiceNumber ?? string.Empty)</div>
+                    <div class="hdr-cell-right"><strong>Date:</strong> @((Model?.SaleDate ?? DateTime.Now).ToString("dd-MMM-yyyy hh:mm tt"))</div>
+                    <div><strong>Customer Name:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
+                    <div class="hdr-cell-right"><strong>Payment Mode:</strong> @paymentModeText</div>
+                    <div><strong>Doctor:</strong> __________</div>
+                    <div class="hdr-cell-right"><strong>OP/IP No:</strong> __________</div>
+                </div>
+            </div>
 
-    <div style="max-width:420px; margin-left:auto;">
-        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><span class="mono">@Model.SubTotal.ToString("0.00")</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">@Model.ItemDiscount.ToString("0.00")</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">@Model.AdditionalDiscount.ToString("0.00")</span></div>
-        <div style="display:flex; justify-content:space-between;"><span>Tax Total</span><span class="mono">@Model.SaleItems.Sum(i => i.TaxAmount).ToString("0.00")</span></div>
-        <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>@Model.GrandTotal.ToString("0.00")</strong></span></div>
-    </div>
+            <hr />
 
-    <hr />
 
-    <div>
-        <strong>Payments</strong>
-        @if (Model.Payments == null || !Model.Payments.Any())
-        {
-            <div class="muted">-</div>
-        }
-        else
-        {
-            <ul>
-                @foreach (var p in Model.Payments)
+
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Batch</th>
+                        <th>Exp</th>
+                        <th>Unit</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Disc</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in Model.SaleItems)
+                    {
+                        <tr>
+                            <td>
+                                <div><strong>@i.ProductName</strong></div>
+                            </td>
+                            <td>
+                                <div>@i.BatchNumber</div>
+                            </td>
+                            <td class="mono">@i.ExpiryDate.ToString("MM/yy")</td>
+                            <td>@i.UomName</td>
+                            <td class="text-end mono">@i.Quantity</td>
+                            <td class="text-end mono">@i.Price.ToString("0.00")</td>
+                            <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
+                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <hr />
+
+            <div class="summary-row">
+                <div style="max-width:420px; margin-left:auto; width:100%;">
+                    <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">₹ @itemDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">₹ @additionalDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Round-off</span><span class="mono">₹ @roundOffAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>₹ @roundedGrandTotal.ToString("0.00")</strong></span></div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div>
+                <strong>Payments</strong>
+                @if (Model.Payments == null || !Model.Payments.Any())
                 {
-                    <li>@p.PaymentMode - @p.Amount.ToString("0.00") @if (!string.IsNullOrWhiteSpace(p.Reference)) { <span class="muted">(@p.Reference)</span> }</li>
+                    <div class="muted">-</div>
                 }
-            </ul>
-        }
-    </div>
+                else
+                {
+                    <div>@paymentsText</div>
+                }
+            </div>
+        </div>
 
-    <script>
-        window.addEventListener('load', function () {
-            window.print();
-        });
-    </script>
+        <div class="cut-line"></div>
+
+        <div class="copy-half" id="officeCopy">
+            <div class="hdr-row">
+                <div class="copy-label copy-label-float">Office Copy</div>
+                <div class="hdr-grid">
+                    <div><strong>Invoice No:</strong> @(Model?.InvoiceNumber ?? string.Empty)</div>
+                    <div class="hdr-cell-right"><strong>Date:</strong> @((Model?.SaleDate ?? DateTime.Now).ToString("dd-MMM-yyyy hh:mm tt"))</div>
+                    <div><strong>Customer Name:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
+                    <div class="hdr-cell-right"><strong>Payment Mode:</strong> @paymentModeText</div>
+                    <div><strong>Doctor:</strong> __________</div>
+                    <div class="hdr-cell-right"><strong>OP/IP No:</strong> __________</div>
+                </div>
+            </div>
+
+            <hr />
+
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Batch</th>
+                        <th>Exp</th>
+                        <th>Unit</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Disc</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in Model.SaleItems)
+                    {
+                        <tr>
+                            <td>
+                                <div><strong>@i.ProductName</strong></div>
+                            </td>
+                            <td>
+                                <div>@i.BatchNumber</div>
+                            </td>
+                            <td class="mono">@i.ExpiryDate.ToString("MM/yy")</td>
+                            <td>@i.UomName</td>
+                            <td class="text-end mono">@i.Quantity</td>
+                            <td class="text-end mono">@i.Price.ToString("0.00")</td>
+                            <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
+                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <hr />
+
+            <div class="summary-row">
+                <div style="max-width:420px; margin-left:auto; width:100%;">
+                    <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">₹ @itemDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">₹ @additionalDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Round-off</span><span class="mono">₹ @roundOffAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>₹ @roundedGrandTotal.ToString("0.00")</strong></span></div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div>
+                <strong>Payments</strong>
+                @if (Model.Payments == null || !Model.Payments.Any())
+                {
+                    <div class="muted">-</div>
+                }
+                else
+                {
+                    <div>@paymentsText</div>
+                }
+            </div>
+        </div>
+    </div>
+    }
+    else
+    {
+        <div class="copy-full" id="customerCopy">
+            <div class="hdr-row">
+                <div class="copy-label copy-label-float">Customer Copy</div>
+                <div class="hdr-grid">
+                    <div><strong>Invoice No:</strong> @Model.InvoiceNumber</div>
+                    <div class="hdr-cell-right"><strong>Date:</strong> @((Model?.SaleDate ?? DateTime.Now).ToString("dd-MMM-yyyy hh:mm tt"))</div>
+                    <div><strong>Customer Name:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
+                    <div class="hdr-cell-right"><strong>Payment Mode:</strong> @paymentModeText</div>
+                    <div><strong>Doctor:</strong> __________</div>
+                    <div class="hdr-cell-right"><strong>OP/IP No:</strong> __________</div>
+                </div>
+            </div>
+
+            <hr />
+
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Batch</th>
+                        <th>Exp</th>
+                        <th>Unit</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Disc</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in Model.SaleItems)
+                    {
+                        <tr>
+                            <td>
+                                <div><strong>@i.ProductName</strong></div>
+                            </td>
+                            <td>
+                                <div>@i.BatchNumber</div>
+                            </td>
+                            <td class="mono">@i.ExpiryDate.ToString("MM/yy")</td>
+                            <td>@i.UomName</td>
+                            <td class="text-end mono">@i.Quantity</td>
+                            <td class="text-end mono">@i.Price.ToString("0.00")</td>
+                            <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
+                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <hr />
+
+            <div class="summary-row">
+                <div style="max-width:420px; margin-left:auto; width:100%;">
+                    <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">₹ @itemDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">₹ @additionalDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Round-off</span><span class="mono">₹ @roundOffAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>₹ @roundedGrandTotal.ToString("0.00")</strong></span></div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div>
+                <strong>Payments</strong>
+                @if (Model.Payments == null || !Model.Payments.Any())
+                {
+                    <div class="muted">-</div>
+                }
+                else
+                {
+                    <div>@paymentsText</div>
+                }
+            </div>
+        </div>
+
+        <div class="page-break"></div>
+
+        <div class="copy-full" id="officeCopy">
+            <div class="hdr-row">
+                <div class="copy-label copy-label-float">Office Copy</div>
+                <div class="hdr-grid">
+                    <div><strong>Invoice No:</strong> @Model.InvoiceNumber</div>
+                    <div class="hdr-cell-right"><strong>Date:</strong> @((Model?.SaleDate ?? DateTime.Now).ToString("dd-MMM-yyyy hh:mm tt"))</div>
+                    <div><strong>Customer Name:</strong> @(Model.Customer?.Name ?? "Walk-in")</div>
+                    <div class="hdr-cell-right"><strong>Payment Mode:</strong> @paymentModeText</div>
+                    <div><strong>Doctor:</strong> __________</div>
+                    <div class="hdr-cell-right"><strong>OP/IP No:</strong> __________</div>
+                </div>
+            </div>
+
+            <hr />
+
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Batch</th>
+                        <th>Exp</th>
+                        <th>Unit</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Disc</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in Model.SaleItems)
+                    {
+                        <tr>
+                            <td>
+                                <div><strong>@i.ProductName</strong></div>
+                            </td>
+                            <td>
+                                <div>@i.BatchNumber</div>
+                            </td>
+                            <td class="mono">@i.ExpiryDate.ToString("MM/yy")</td>
+                            <td>@i.UomName</td>
+                            <td class="text-end mono">@i.Quantity</td>
+                            <td class="text-end mono">@i.Price.ToString("0.00")</td>
+                            <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
+                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <hr />
+
+            <div class="summary-row">
+                <div style="max-width:420px; margin-left:auto; width:100%;">
+                    <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Item Discount</span><span class="mono">₹ @itemDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Additional Discount</span><span class="mono">₹ @additionalDiscountAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Round-off</span><span class="mono">₹ @roundOffAmt.ToString("0.00")</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span><strong>Grand Total</strong></span><span class="mono"><strong>₹ @roundedGrandTotal.ToString("0.00")</strong></span></div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div>
+                <strong>Payments</strong>
+                @if (Model.Payments == null || !Model.Payments.Any())
+                {
+                    <div class="muted">-</div>
+                }
+                else
+                {
+                    <div>@paymentsText</div>
+                }
+            </div>
+        </div>
+    }
+
 </body>
 </html>
