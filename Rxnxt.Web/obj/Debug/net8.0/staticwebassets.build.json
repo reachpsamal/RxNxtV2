@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "WegsSqyybpyPoVqyWSyFHCJ39kjcZBwl1g3KrXx9ICU=",
+  "Hash": "d3WPrHbximGGhMzn9SbOBxMpZKshrTnBEQMZjpfc0jY=",
   "Source": "Rxnxt.Web",
   "BasePath": "_content/Rxnxt.Web",
   "Mode": "Default",
@@ -1231,6 +1231,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\lib\\jquery\\LICENSE.txt"
+    },
+    {
+      "Identity": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\Rotativa\\wkhtmltopdf.exe",
+      "SourceId": "Rxnxt.Web",
+      "SourceType": "Discovered",
+      "ContentRoot": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\",
+      "BasePath": "_content/Rxnxt.Web",
+      "RelativePath": "Rotativa/wkhtmltopdf.exe",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\Rotativa\\wkhtmltopdf.exe"
     }
   ]
 }

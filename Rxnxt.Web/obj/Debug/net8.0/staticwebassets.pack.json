@@ -5,6 +5,10 @@
       "PackagePath": "staticwebassets\\Rxnxt.Web.bundle.scp.css"
     },
     {
+      "Id": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\Rotativa\\wkhtmltopdf.exe",
+      "PackagePath": "staticwebassets\\Rotativa\\wkhtmltopdf.exe"
+    },
+    {
       "Id": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\css\\pharmacy.css",
       "PackagePath": "staticwebassets\\css\\pharmacy.css"
     },

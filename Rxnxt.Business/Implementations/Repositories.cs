@@ -432,6 +432,21 @@ namespace Rxnxt.Business.Implementations
 
                     var now = DateTime.Now;
 
+                    static string NormalizeBatch(string? batchNumber) => (batchNumber ?? string.Empty).Trim();
+
+                    async Task<ProductStockRow?> FindStockAsync(string productId, string? batchNumber, DateTime? expiryDate)
+                    {
+                        var batchNorm = NormalizeBatch(batchNumber);
+                        if (!expiryDate.HasValue) return null;
+                        var exp = expiryDate.Value.Date;
+
+                        return await _context.ProductStocks.FirstOrDefaultAsync(ps =>
+                            ps.ProductID == productId &&
+                            (ps.BatchNumber ?? string.Empty) == batchNorm &&
+                            ps.ExpiryDate.HasValue &&
+                            EF.Functions.DateDiffDay(ps.ExpiryDate.Value, exp) == 0);
+                    }
+
                     SaleHeaderRow? existingHeader = null;
                     if (request.SaleId.HasValue && request.SaleId.Value > 0)
                     {
@@ -491,6 +506,24 @@ namespace Rxnxt.Business.Implementations
                     if (existingHeader != null)
                     {
                         header = existingHeader;
+
+                        var oldDetails = await _context.SaleDetails.Where(d => d.SaleID == headerUniqueId).ToListAsync();
+                        foreach (var d in oldDetails)
+                        {
+                            var stockRow = await FindStockAsync(d.ProductID, d.BatchNumber, d.ExpiryDate);
+                            if (stockRow == null)
+                            {
+                                return new SaleResult
+                                {
+                                    Success = false,
+                                    Message = $"Stock not found to restore for ProductID {d.ProductID}, Batch {d.BatchNumber}, Exp {d.ExpiryDate:dd/MM/yyyy}" 
+                                };
+                            }
+
+                            var qtyToRestore = d.Qty ?? 0m;
+                            stockRow.PackQty = (stockRow.PackQty ?? 0m) + qtyToRestore;
+                        }
+
                         header.BillType = billType;
                         header.CustomerID = customerIdStr;
                         header.Narration = null;
@@ -508,7 +541,6 @@ namespace Rxnxt.Business.Implementations
                         header.StoreId = string.IsNullOrWhiteSpace(storeId) ? null : storeId;
                         await _context.SaveChangesAsync();
 
-                        var oldDetails = await _context.SaleDetails.Where(d => d.SaleID == headerUniqueId).ToListAsync();
                         if (oldDetails.Count > 0) _context.SaleDetails.RemoveRange(oldDetails);
 
                         var oldPayments = await _context.SalePayments.Where(p => p.SaleId == headerUniqueId).ToListAsync();
@@ -547,6 +579,33 @@ namespace Rxnxt.Business.Implementations
 
                         header.BillNo = $"INV-{header.ID}";
                         await _context.SaveChangesAsync();
+                    }
+
+                    foreach (var item in request.Items)
+                    {
+                        var productIdStr = item.ProductId.ToString();
+                        var stockRow = await FindStockAsync(productIdStr, item.BatchNumber, item.ExpiryDate);
+                        if (stockRow == null)
+                        {
+                            return new SaleResult
+                            {
+                                Success = false,
+                                Message = $"Stock not found for {item.ProductName} / {item.BatchNumber}"
+                            };
+                        }
+
+                        var available = stockRow.PackQty ?? 0m;
+                        var required = (decimal)item.Quantity;
+                        if (available < required)
+                        {
+                            return new SaleResult
+                            {
+                                Success = false,
+                                Message = $"Insufficient stock for {item.ProductName} / {item.BatchNumber}. Available {available:0.##}, Required {required:0.##}"
+                            };
+                        }
+
+                        stockRow.PackQty = available - required;
                     }
 
                     var detailBaseSum = baseSum;
@@ -979,11 +1038,46 @@ namespace Rxnxt.Business.Implementations
             var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
             if (salesIntegrationEnabled)
             {
-                var header = await _context.SaleHeaders.FirstOrDefaultAsync(h => h.ID == id);
-                if (header == null) return false;
-                header.ActiveStatus = false;
-                await _context.SaveChangesAsync();
-                return true;
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    var header = await _context.SaleHeaders.FirstOrDefaultAsync(h => h.ID == id);
+                    if (header == null) return false;
+
+                    static string NormalizeBatch(string? batchNumber) => (batchNumber ?? string.Empty).Trim();
+
+                    async Task<ProductStockRow?> FindStockAsync(string productId, string? batchNumber, DateTime? expiryDate)
+                    {
+                        var batchNorm = NormalizeBatch(batchNumber);
+                        if (!expiryDate.HasValue) return null;
+                        var exp = expiryDate.Value.Date;
+
+                        return await _context.ProductStocks.FirstOrDefaultAsync(ps =>
+                            ps.ProductID == productId &&
+                            (ps.BatchNumber ?? string.Empty) == batchNorm &&
+                            ps.ExpiryDate.HasValue &&
+                            EF.Functions.DateDiffDay(ps.ExpiryDate.Value, exp) == 0);
+                    }
+
+                    var details = await _context.SaleDetails.Where(d => d.SaleID == header.UniqueID).ToListAsync();
+                    foreach (var d in details)
+                    {
+                        var stockRow = await FindStockAsync(d.ProductID, d.BatchNumber, d.ExpiryDate);
+                        if (stockRow == null) return false;
+                        var qtyToRestore = d.Qty ?? 0m;
+                        stockRow.PackQty = (stockRow.PackQty ?? 0m) + qtyToRestore;
+                    }
+
+                    header.ActiveStatus = false;
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    return false;
+                }
             }
 
             var sale = await _context.Sales.FirstOrDefaultAsync(s => s.Id == id);

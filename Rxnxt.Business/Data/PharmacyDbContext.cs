@@ -22,6 +22,8 @@ namespace Rxnxt.Business.Data
         public DbSet<ProductMasterRow> ProductMasters { get; set; }
         public DbSet<CustomerMasterRow> CustomerMasters { get; set; }
 
+        public DbSet<ProductStockRow> ProductStocks { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -33,6 +35,12 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<SalePaymentRow>().ToTable("SalePayment");
             modelBuilder.Entity<ProductMasterRow>().ToTable("ProductMaster");
             modelBuilder.Entity<CustomerMasterRow>().ToTable("CustomerMaster");
+            modelBuilder.Entity<ProductStockRow>().ToTable("ProductStock");
+
+            modelBuilder.Entity<ProductStockRow>(entity =>
+            {
+                entity.HasIndex(e => new { e.ProductID, e.BatchNumber, e.ExpiryDate });
+            });
 
             // Customer
             modelBuilder.Entity<Customer>(entity =>

@@ -34,13 +34,20 @@
         .hdr-cell-right { text-align: left; }
         .copy-label-float { position: absolute; right: 0; top: 0; text-align: right; }
         .hdr-row strong { font-weight: 700; }
-        .summary-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-end; }
+        .summary-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+        .tax-breakup { flex: 1 1 auto; max-width: 55%; }
+        .tax-breakup table { width: 100%; border-collapse: collapse; }
+        .tax-breakup th, .tax-breakup td { padding: 1px 4px; border: 1px solid #ddd; }
+        .tax-breakup th { font-weight: 700; }
+        .tax-breakup .lbl { width: 56px; }
+        .tax-breakup .num { text-align: right; white-space: nowrap; }
+        .pay-block { font-size: 9px; line-height: 1.2; }
         .cut-line { border-top: 1px dashed #000; margin: 6mm 0; }
         .page-break { break-before: page; page-break-before: always; }
         .hdr-row, .summary-row { break-inside: avoid; page-break-inside: avoid; }
         .table-sm > :not(caption) > * > * { padding: 0.15rem 0.25rem; }
         .table thead th { font-size: 10px; }
-        .table tbody td { font-size: 10px; }
+        .table tbody td { font-size: 8px; }
         .summary-row div, .summary-row span {
             font-size: 10px;
             line-height: 1.2;
@@ -58,7 +65,7 @@
     </div>
 
     @{
-        const int maxRowsPerHalfPage = 8;
+        const int maxRowsPerHalfPage = 15;
         var useTwoCopiesOnOnePage = (Model?.SaleItems?.Count ?? 0) <= maxRowsPerHalfPage;
         var paymentModes = (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
             .Select(p => (p?.PaymentMode ?? string.Empty).Trim())
@@ -75,15 +82,119 @@
         var roundedGrandTotal = Math.Round(netGrandTotal, 0, MidpointRounding.AwayFromZero);
         var roundOffAmt = roundedGrandTotal - netGrandTotal;
 
-        var paymentsText = string.Join(", ", (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
-            .Where(p => p != null)
+        string NumberToWords(long number)
+        {
+            if (number == 0) return "Zero";
+            if (number < 0) return "Minus " + NumberToWords(Math.Abs(number));
+
+            string ConvertBelowThousand(long n)
+            {
+                var ones = new[] { "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen" };
+                var tens = new[] { "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety" };
+
+                var parts = new List<string>();
+
+                if (n >= 100)
+                {
+                    parts.Add(ones[n / 100] + " Hundred");
+                    n %= 100;
+                }
+
+                if (n >= 20)
+                {
+                    parts.Add(tens[n / 10] + (n % 10 != 0 ? " " + ones[n % 10] : ""));
+                }
+                else if (n > 0)
+                {
+                    parts.Add(ones[n]);
+                }
+
+                return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+            }
+
+            var resultParts = new List<string>();
+
+            void AddPart(long value, string label)
+            {
+                if (value <= 0) return;
+                resultParts.Add(ConvertBelowThousand(value) + " " + label);
+            }
+
+            var crores = number / 10000000;
+            number %= 10000000;
+            var lakhs = number / 100000;
+            number %= 100000;
+            var thousands = number / 1000;
+            number %= 1000;
+            var remainder = number;
+
+            AddPart(crores, "Crore");
+            AddPart(lakhs, "Lakh");
+            AddPart(thousands, "Thousand");
+            if (remainder > 0)
+            {
+                resultParts.Add(ConvertBelowThousand(remainder));
+            }
+
+            return string.Join(" ", resultParts.Where(p => !string.IsNullOrWhiteSpace(p))).Trim();
+        }
+
+        var amountInWordsWords = NumberToWords((long)roundedGrandTotal);
+
+        var taxByRate = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>())
+            .GroupBy(i => i.TaxPercent)
+            .Select(g => new
+            {
+                Rate = g.Key,
+                TaxTotal = g.Sum(x => x.TaxAmount)
+            })
+            .Where(x => x.Rate > 0)
+            .OrderBy(x => x.Rate)
+            .ToList();
+
+        var fixedRates = new[] { 5m, 12m, 18m };
+        var taxTotalByRate = taxByRate.ToDictionary(x => x.Rate, x => x.TaxTotal);
+
+        var paymentsOrdered = (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
+            .Where(p => p != null && p.Amount != 0m)
             .Select(p =>
             {
-                var mode = (p!.PaymentMode ?? string.Empty).Trim();
-                if (string.IsNullOrWhiteSpace(mode)) mode = "Payment";
-                var amountText = $"₹ {p.Amount:0.00}";
-                var referenceText = string.IsNullOrWhiteSpace(p.Reference) ? string.Empty : $" ({p.Reference})";
-                return $"{mode} {amountText}{referenceText}";
+                var rawMode = (p!.PaymentMode ?? string.Empty).Trim();
+                var rawModeLower = rawMode.ToLowerInvariant();
+
+                var displayMode = rawMode;
+                var order = 99;
+                if (rawModeLower.Contains("cash")) { displayMode = "Cash"; order = 0; }
+                else if (rawModeLower.Contains("card")) { displayMode = "Card"; order = 1; }
+                else if (rawModeLower.Contains("upi")) { displayMode = "UPI"; order = 2; }
+                else if (string.IsNullOrWhiteSpace(displayMode)) { displayMode = "Payment"; }
+
+                return new
+                {
+                    Order = order,
+                    Mode = displayMode,
+                    Amount = p.Amount,
+                    Reference = (p.Reference ?? string.Empty).Trim()
+                };
+            })
+            .ToList();
+
+        var paymentsText = string.Join(", ", paymentsOrdered
+            .GroupBy(x => x.Mode, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new
+            {
+                Mode = g.Key,
+                Order = g.Min(x => x.Order),
+                Amount = g.Sum(x => x.Amount),
+                References = g.Select(x => x.Reference).Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            })
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Mode)
+            .Select(x =>
+            {
+                var amountText = $"₹ {x.Amount:0.00}";
+                var referenceText = x.References.Count == 0 ? string.Empty : $" ({string.Join("/", x.References)})";
+                return $"{x.Mode} {amountText}{referenceText}";
             }));
     }
 
@@ -115,7 +226,7 @@
                         <th>Exp</th>
                         <th>Unit</th>
                         <th class="text-end">Qty</th>
-                        <th class="text-end">Price</th>
+                        <th class="text-end">Mrp</th>
                         <th class="text-end">Disc</th>
                         <th class="text-end">Tax</th>
                         <th class="text-end">Total</th>
@@ -146,6 +257,37 @@
             <hr />
 
             <div class="summary-row">
+                <div class="tax-breakup">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="lbl">GST</th>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    <th class="num">@rate.ToString("0.##")%</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="lbl"><strong>CGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                            <tr>
+                                <td class="lbl"><strong>SGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div style="max-width:420px; margin-left:auto; width:100%;">
                     <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
                     <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
@@ -158,9 +300,9 @@
 
             <hr />
 
-            <div>
-                <strong>Payments</strong>
-                @if (Model.Payments == null || !Model.Payments.Any())
+            <div class="pay-block">
+                <div><span style="text-decoration:underline;"><strong>Payment Details:-</strong></span></div>
+                @if (string.IsNullOrWhiteSpace(paymentsText))
                 {
                     <div class="muted">-</div>
                 }
@@ -168,6 +310,7 @@
                 {
                     <div>@paymentsText</div>
                 }
+                <div><strong>Amount in Words:</strong> <em>@amountInWordsWords Rupees Only</em></div>
             </div>
         </div>
 
@@ -196,7 +339,7 @@
                         <th>Exp</th>
                         <th>Unit</th>
                         <th class="text-end">Qty</th>
-                        <th class="text-end">Price</th>
+                        <th class="text-end">Mrp</th>
                         <th class="text-end">Disc</th>
                         <th class="text-end">Tax</th>
                         <th class="text-end">Total</th>
@@ -227,6 +370,37 @@
             <hr />
 
             <div class="summary-row">
+                <div class="tax-breakup">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="lbl">GST</th>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    <th class="num">@rate.ToString("0.##")%</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="lbl"><strong>CGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                            <tr>
+                                <td class="lbl"><strong>SGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div style="max-width:420px; margin-left:auto; width:100%;">
                     <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
                     <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
@@ -239,9 +413,9 @@
 
             <hr />
 
-            <div>
-                <strong>Payments</strong>
-                @if (Model.Payments == null || !Model.Payments.Any())
+            <div class="pay-block">
+                <div><span style="text-decoration:underline;"><strong>Payment Details:-</strong></span></div>
+                @if (string.IsNullOrWhiteSpace(paymentsText))
                 {
                     <div class="muted">-</div>
                 }
@@ -249,6 +423,7 @@
                 {
                     <div>@paymentsText</div>
                 }
+                <div><strong>Amount in Words:</strong> <em>@amountInWordsWords Rupees Only</em></div>
             </div>
         </div>
     </div>
@@ -309,6 +484,37 @@
             <hr />
 
             <div class="summary-row">
+                <div class="tax-breakup">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="lbl">GST</th>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    <th class="num">@rate.ToString("0.##")%</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="lbl"><strong>CGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                            <tr>
+                                <td class="lbl"><strong>SGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div style="max-width:420px; margin-left:auto; width:100%;">
                     <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
                     <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
@@ -322,8 +528,8 @@
             <hr />
 
             <div>
-                <strong>Payments</strong>
-                @if (Model.Payments == null || !Model.Payments.Any())
+                <div><span style="text-decoration:underline;"><strong>Payment Details:-</strong></span></div>
+                @if (string.IsNullOrWhiteSpace(paymentsText))
                 {
                     <div class="muted">-</div>
                 }
@@ -331,6 +537,7 @@
                 {
                     <div>@paymentsText</div>
                 }
+                <div><strong>Amount in Words:</strong> <em>@amountInWordsWords Rupees Only</em></div>
             </div>
         </div>
 
@@ -390,6 +597,37 @@
             <hr />
 
             <div class="summary-row">
+                <div class="tax-breakup">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="lbl">GST</th>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    <th class="num">@rate.ToString("0.##")%</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="lbl"><strong>CGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                            <tr>
+                                <td class="lbl"><strong>SGST</strong></td>
+                                @foreach (var rate in fixedRates)
+                                {
+                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div style="max-width:420px; margin-left:auto; width:100%;">
                     <div style="display:flex; justify-content:space-between;"><span>Taxable Amt</span><span class="mono">₹ @taxableAmt.ToString("0.00")</span></div>
                     <div style="display:flex; justify-content:space-between;"><span>Tax Amt</span><span class="mono">₹ @taxAmt.ToString("0.00")</span></div>
@@ -402,9 +640,9 @@
 
             <hr />
 
-            <div>
-                <strong>Payments</strong>
-                @if (Model.Payments == null || !Model.Payments.Any())
+            <div class="pay-block">
+                <div><span style="text-decoration:underline;"><strong>Payment Details:-</strong></span></div>
+                @if (string.IsNullOrWhiteSpace(paymentsText))
                 {
                     <div class="muted">-</div>
                 }
@@ -412,6 +650,7 @@
                 {
                     <div>@paymentsText</div>
                 }
+                <div><strong>Amount in Words:</strong> <em>@amountInWordsWords Rupees Only</em></div>
             </div>
         </div>
     }
