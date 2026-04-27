@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using QuestPDF.Infrastructure;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.Implementations;
 using Rxnxt.Business.Interfaces;
@@ -8,6 +9,8 @@ using Rxnxt.Services;
 using Rxnxt.Services.Implementations;
 
 var builder = WebApplication.CreateBuilder(args);
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 // Add services to the container.
 builder.Services.AddControllersWithViews()

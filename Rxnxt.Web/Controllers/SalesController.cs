@@ -6,6 +6,8 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Globalization;
+using Rxnxt.Web.Pdf;
+using QuestPDF.Fluent;
 
 namespace Rxnxt.Web.Controllers
 {
@@ -179,6 +181,19 @@ namespace Rxnxt.Web.Controllers
             var sale = await _saleService.GetByIdAsync(id);
             if (sale == null) return NotFound();
             return View(sale);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Pdf(int id, CancellationToken cancellationToken)
+        {
+            _ = cancellationToken;
+            var sale = await _saleService.GetByIdAsync(id);
+            if (sale == null) return NotFound();
+
+            var doc = new InvoicePdfDocument(sale);
+            var bytes = doc.GeneratePdf();
+            var invoice = string.IsNullOrWhiteSpace(sale.InvoiceNumber) ? $"{sale.Id}" : sale.InvoiceNumber;
+            return File(bytes, "application/pdf", $"Invoice-{invoice}.pdf");
         }
 
         [HttpGet]

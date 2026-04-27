@@ -74,11 +74,17 @@
             .ToList();
         var paymentModeText = paymentModes.Count == 0 ? "-" : string.Join("+", paymentModes);
 
-        var taxableAmt = Model?.SubTotal ?? 0m;
-        var itemDiscountAmt = Model?.ItemDiscount ?? 0m;
+        static decimal IncludedTax(decimal taxInclusiveTotal, decimal rate) => rate > 0 ? (taxInclusiveTotal * (rate / (100m + rate))) : 0m;
+
+        var saleItemsForCalc = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>()).ToList();
+        var itemDiscountAmt = saleItemsForCalc.Sum(i => i.DiscountAmount);
         var additionalDiscountAmt = Model?.AdditionalDiscount ?? 0m;
-        var taxAmt = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>()).Sum(i => i.TaxAmount);
-        var netGrandTotal = Model?.GrandTotal ?? 0m;
+
+        var lineTotalSum = saleItemsForCalc.Sum(i => Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount));
+        var taxAmt = saleItemsForCalc.Sum(i => IncludedTax(Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount), i.TaxPercent));
+        var taxableAmt = lineTotalSum - taxAmt;
+
+        var netGrandTotal = Math.Max(0m, lineTotalSum - additionalDiscountAmt);
         var roundedGrandTotal = Math.Round(netGrandTotal, 0, MidpointRounding.AwayFromZero);
         var roundOffAmt = roundedGrandTotal - netGrandTotal;
 
@@ -141,12 +147,12 @@
 
         var amountInWordsWords = NumberToWords((long)roundedGrandTotal);
 
-        var taxByRate = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>())
+        var taxByRate = saleItemsForCalc
             .GroupBy(i => i.TaxPercent)
             .Select(g => new
             {
                 Rate = g.Key,
-                TaxTotal = g.Sum(x => x.TaxAmount)
+                TaxTotal = g.Sum(x => IncludedTax(Math.Max(0m, (x.Price * x.Quantity) - x.DiscountAmount), x.TaxPercent))
             })
             .Where(x => x.Rate > 0)
             .OrderBy(x => x.Rate)
@@ -233,8 +239,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var i in Model.SaleItems)
+                    @foreach (var i in Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>())
                     {
+                        var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
+                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -247,8 +255,8 @@
                             <td class="text-end mono">@i.Quantity</td>
                             <td class="text-end mono">@i.Price.ToString("0.00")</td>
                             <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
-                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
-                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                            <td class="text-end mono">@lineTax.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@lineTotal.ToString("0.00")</strong></td>
                         </tr>
                     }
                 </tbody>
@@ -348,6 +356,8 @@
                 <tbody>
                     @foreach (var i in Model.SaleItems)
                     {
+                        var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
+                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -360,8 +370,8 @@
                             <td class="text-end mono">@i.Quantity</td>
                             <td class="text-end mono">@i.Price.ToString("0.00")</td>
                             <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
-                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
-                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                            <td class="text-end mono">@lineTax.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@lineTotal.ToString("0.00")</strong></td>
                         </tr>
                     }
                 </tbody>
@@ -462,6 +472,8 @@
                 <tbody>
                     @foreach (var i in Model.SaleItems)
                     {
+                        var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
+                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -474,8 +486,8 @@
                             <td class="text-end mono">@i.Quantity</td>
                             <td class="text-end mono">@i.Price.ToString("0.00")</td>
                             <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
-                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
-                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                            <td class="text-end mono">@lineTax.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@lineTotal.ToString("0.00")</strong></td>
                         </tr>
                     }
                 </tbody>
@@ -575,6 +587,8 @@
                 <tbody>
                     @foreach (var i in Model.SaleItems)
                     {
+                        var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
+                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -587,8 +601,8 @@
                             <td class="text-end mono">@i.Quantity</td>
                             <td class="text-end mono">@i.Price.ToString("0.00")</td>
                             <td class="text-end mono">@i.DiscountAmount.ToString("0.00")</td>
-                            <td class="text-end mono">@i.TaxAmount.ToString("0.00")</td>
-                            <td class="text-end mono"><strong>@i.Total.ToString("0.00")</strong></td>
+                            <td class="text-end mono">@lineTax.ToString("0.00")</td>
+                            <td class="text-end mono"><strong>@lineTotal.ToString("0.00")</strong></td>
                         </tr>
                     }
                 </tbody>

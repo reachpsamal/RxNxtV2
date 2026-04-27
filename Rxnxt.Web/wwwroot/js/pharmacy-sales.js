@@ -665,17 +665,15 @@ function computeTaxBreakupBySlab() {
         18: { cgst: 0, sgst: 0 }
     };
 
-    const additionalDiscount = getAdditionalDiscountAmount();
-    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
-
     saleItems.forEach(item => {
         const gst = parseFloat(item.taxPercent) || 0;
         if (!(gst === 5 || gst === 12 || gst === 18)) return;
 
+        // After-tax additional discount model:
+        // - item.total is tax-inclusive MRP (after item-discount only)
+        // - tax is extracted from item.total
         const baseAfterDisc = parseFloat(item.baseTotal) || 0;
-        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
-        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
-        const includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+        const includedTax = gst > 0 ? (baseAfterDisc * (gst / (100 + gst))) : 0;
         const halfTax = includedTax / 2;
 
         const cgstAmt = halfTax;
@@ -964,7 +962,7 @@ function recalculateBill() {
     let subTotal = 0;
     let itemDiscount = 0;
     let taxTotal = 0;
-    let grandTotal = 0;
+    let grandTotalBeforeAddDisc = 0;
 
     saleItems.forEach(item => {
         const price = parseFloat(item.price) || 0;
@@ -975,28 +973,28 @@ function recalculateBill() {
         itemDiscount += discAmt;
     });
 
-    syncAdditionalDiscountAmountFromPercent();
+    if (!isPrefillingEditSale) {
+        syncAdditionalDiscountAmountFromPercent();
+    }
     const additionalDiscount = getAdditionalDiscountAmount();
 
-    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
+    // After-tax additional discount model:
+    // - additional discount is applied only at summary level (payable), not distributed to line items
     saleItems.forEach(item => {
         const gst = parseFloat(item.taxPercent) || 0;
         const baseAfterDisc = parseFloat(item.baseTotal) || 0;
-        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
-        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
-        const includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
 
+        const includedTax = gst > 0 ? (baseAfterDisc * (gst / (100 + gst))) : 0;
         item.taxAmount = includedTax;
-        item.total = afterAllDiscounts;
+        item.total = baseAfterDisc;
 
         taxTotal += includedTax;
-        grandTotal += afterAllDiscounts;
+        grandTotalBeforeAddDisc += baseAfterDisc;
     });
 
-    const baseGrandTotal = Math.max(0, grandTotal);
-
-    const rounded = roundToNearestRupee(baseGrandTotal);
-    const roundOff = rounded - baseGrandTotal;
+    const basePayable = Math.max(0, grandTotalBeforeAddDisc - additionalDiscount);
+    const rounded = roundToNearestRupee(basePayable);
+    const roundOff = rounded - basePayable;
     const displayGrandTotal = rounded;
     $('#billRoundOff').text(formatSignedCurrency(roundOff));
 
@@ -1026,9 +1024,13 @@ function updatePaymentAmount(grandTotal) {
         const change = cashReceived - grandTotal;
         $('#changeAmount').text(formatCurrency(Math.max(0, change)));
     } else if (selectedPaymentMethod === 'Card') {
-        $('#cardAmount').val(grandTotal.toFixed(2));
+        if (!isPrefillingEditSale) {
+            $('#cardAmount').val(grandTotal.toFixed(2));
+        }
     } else if (selectedPaymentMethod === 'UPI') {
-        $('#upiAmount').val(grandTotal.toFixed(2));
+        if (!isPrefillingEditSale) {
+            $('#upiAmount').val(grandTotal.toFixed(2));
+        }
     } else if (selectedPaymentMethod === 'Split') {
         if (isPrefillingEditSale) {
             const c = parseFloat($('#splitCash').val()) || 0;
@@ -1066,7 +1068,7 @@ function selectPaymentMethod(method, options) {
 function getGrandTotal() {
     let subTotal = 0;
     let itemDiscount = 0;
-    let grandTotal = 0;
+    let grandTotalBeforeAddDisc = 0;
     saleItems.forEach(item => {
         const price = parseFloat(item.price) || 0;
         const qty = parseFloat(item.quantity) || 0;
@@ -1076,20 +1078,18 @@ function getGrandTotal() {
         itemDiscount += discAmt;
     });
     // Percent-driven additional discount (source of truth is %)
-    syncAdditionalDiscountAmountFromPercent();
+    if (!isPrefillingEditSale) {
+        syncAdditionalDiscountAmountFromPercent();
+    }
     const additionalDiscount = getAdditionalDiscountAmount();
 
-    const baseSum = saleItems.reduce((sum, it) => sum + (parseFloat(it.baseTotal) || 0), 0);
+    // After-tax additional discount model: do not distribute discount into line totals
     saleItems.forEach(item => {
         const baseAfterDisc = parseFloat(item.baseTotal) || 0;
-        const share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterDisc / baseSum)) : 0;
-        const afterAllDiscounts = Math.max(0, baseAfterDisc - share);
-        grandTotal += afterAllDiscounts;
+        grandTotalBeforeAddDisc += baseAfterDisc;
     });
 
-    const baseGrandTotal = Math.max(0, grandTotal);
-    // Bill Settlement always shows rounded grand total; keep payments (Cash/Card/UPI/Split) aligned with it.
-    return roundToNearestRupee(baseGrandTotal);
+    return roundToNearestRupee(Math.max(0, grandTotalBeforeAddDisc - additionalDiscount));
 }
 
 $('#cashAmount').on('input', function () {
@@ -1311,7 +1311,7 @@ $(function () {
 function printLastBill() {
     const saleId = window.__lastCompletedSaleId;
     if (!saleId) return;
-    window.open(`${MVC_BASE}/Print?id=${encodeURIComponent(saleId)}`, '_blank');
+    window.open(`${MVC_BASE}/Pdf?id=${encodeURIComponent(saleId)}`, '_blank');
 }
 
 function startNewSale() {
@@ -1464,18 +1464,34 @@ function loadSaleForEdit(saleId) {
                 const resolvedName = readStockProductName(stock) || '';
                 const resolvedUom = readStockUom(stock) || 'PCS';
                 const resolvedTaxPercent = detectGstPercentFromTaxName(readStockTaxName(stock));
+
+                const qty = parseFloat(i.quantity) || 0;
+                const price = parseFloat(i.price) || 0;
+
+                const serverDiscPercent = parseFloat(i.discountPercent) || 0;
+                const serverDiscAmount = parseFloat(i.discountAmount) || 0;
+                const lineTotal = price * qty;
+                const derivedDiscPercent = (serverDiscPercent > 0)
+                    ? serverDiscPercent
+                    : (lineTotal > 0 && serverDiscAmount > 0) ? (serverDiscAmount / lineTotal) * 100 : 0;
+
+                const serverTaxPercent = parseFloat(i.taxPercent);
+                const effectiveTaxPercent = Number.isFinite(serverTaxPercent) && serverTaxPercent > 0
+                    ? serverTaxPercent
+                    : (parseFloat(resolvedTaxPercent) || 0);
+
                 const item = {
                     productId: i.productId,
                     productName: (i.productName && String(i.productName).trim()) ? i.productName : resolvedName,
                     batchNumber: i.batchNumber,
                     expiryDate: i.expiryDate,
                     uomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
-                    quantity: parseFloat(i.quantity) || 0,
+                    quantity: qty,
                     unitType: i.unitType || (i.uomName || 'PCS'),
-                    price: parseFloat(i.price) || 0,
-                    discountPercent: parseFloat(i.discountPercent) || 0,
+                    price: price,
+                    discountPercent: derivedDiscPercent,
                     discountAmount: 0,
-                    taxPercent: (parseFloat(i.taxPercent) || 0) || resolvedTaxPercent,
+                    taxPercent: effectiveTaxPercent,
                     taxAmount: 0,
                     baseTotal: 0,
                     total: 0,
@@ -1491,6 +1507,7 @@ function loadSaleForEdit(saleId) {
             // back-calc percent from current subtotal-after-item-discount
             const base = computeSubtotalBeforeAdditionalDiscount();
             const percent = base > 0 ? (addDisc / base) * 100 : 0;
+            // Keep more precision to avoid amount drift after subsequent recalculations
             $('#additionalDiscountPercent').val(percent.toFixed(2));
 
             // Payment prefill

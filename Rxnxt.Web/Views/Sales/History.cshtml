@@ -72,8 +72,8 @@
                                     <a class="btn-outline-pharmacy sales-history-action sales-history-action-edit" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.Id })">
                                         <i class="bi bi-pencil-square"></i> Edit
                                     </a>
-                                    <a class="btn-outline-pharmacy sales-history-action sales-history-action-print" style="padding:8px 10px;" target="_blank" href="@Url.Action("Print", "Sales", new { id = s.Id })">
-                                        <i class="bi bi-printer"></i> Print
+                                    <a class="btn-outline-pharmacy sales-history-action sales-history-action-print" style="padding:8px 10px;" target="_blank" href="@Url.Action("Pdf", "Sales", new { id = s.Id })">
+                                        <i class="bi bi-file-earmark-pdf"></i> PDF
                                     </a>
                                     <form method="post" asp-controller="Sales" asp-action="Cancel" style="display:inline;" onsubmit="return confirm('Cancel this sale?');">
                                         @Html.AntiForgeryToken()
