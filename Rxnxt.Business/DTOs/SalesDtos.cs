@@ -70,6 +70,7 @@ public class SaleItemRequest
     public string BatchNumber { get; set; } = string.Empty;
     public DateTime ExpiryDate { get; set; }
     public string UomName { get; set; } = string.Empty;
+    public string? SaleUomName { get; set; }
     public decimal UnitPrice { get; set; }
     public int Quantity { get; set; }
     public string UnitType { get; set; } = "PCS";

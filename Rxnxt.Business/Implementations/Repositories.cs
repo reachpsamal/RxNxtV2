@@ -7,337 +7,669 @@ using Rxnxt.Domain.Models;
 
 namespace Rxnxt.Business.Implementations
 {
-    public class CustomerRepository : ICustomerRepository
-    {
-        private readonly PharmacyDbContext _context;
-        private readonly IConfiguration _configuration;
-        public CustomerRepository(PharmacyDbContext context, IConfiguration configuration)
-        {
-            _context = context;
-            _configuration = configuration;
-        }
+    // public class CustomerRepository : ICustomerRepository
 
-        public async Task<List<CustomerSearchResult>> SearchAsync(string query)
-        {
-            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
-            if (salesIntegrationEnabled)
-            {
-                var q = query.Trim();
-                var term = q.ToLowerInvariant();
-                return await _context.CustomerMasters
-                    .AsNoTracking()
-                    .Where(c => c.ActiveStatus)
-                    .Where(c =>
-                        c.CustomerName.ToLower().Contains(term) ||
-                        (c.MobileNumber != null && c.MobileNumber.Contains(q)))
-                    .OrderBy(c => c.CustomerName)
-                    .Take(10)
-                    .Select(c => new CustomerSearchResult
-                    {
-                        Id = c.ID,
-                        Name = c.CustomerName,
-                        Phone = c.MobileNumber ?? string.Empty,
-                        Email = null,
-                        LoyaltyPoints = 0
-                    })
-                    .ToListAsync();
-            }
+    // {
 
-            {
-                var term = query.Trim().ToLowerInvariant();
-                return await _context.Customers
-                    .AsNoTracking()
-                    .Where(c => c.Name.ToLower().Contains(term)
-                              || c.Phone.Contains(term)
-                              || (c.Email != null && c.Email.ToLower().Contains(term)))
-                    .Select(c => new CustomerSearchResult
-                    {
-                        Id = c.Id,
-                        Name = c.Name,
-                        Phone = c.Phone,
-                        Email = c.Email,
-                        LoyaltyPoints = c.LoyaltyPoints
-                    })
-                    .Take(10)
-                    .ToListAsync();
-            }
-        }
+    //     private readonly PharmacyDbContext _context;
 
-        public async Task<Customer?> GetByIdAsync(int id)
-        {
-            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
-            if (salesIntegrationEnabled)
-            {
-                var row = await _context.CustomerMasters.AsNoTracking().FirstOrDefaultAsync(c => c.ID == id);
-                if (row == null) return null;
-                return new Customer
-                {
-                    Id = row.ID,
-                    Name = row.CustomerName,
-                    Phone = row.MobileNumber ?? string.Empty,
-                    Email = null,
-                    LoyaltyPoints = 0
-                };
-            }
+    //     private readonly IConfiguration _configuration;
 
-            return await _context.Customers.FindAsync(id);
-        }
+    //     public CustomerRepository(PharmacyDbContext context, IConfiguration configuration)
 
-        public async Task<Customer> CreateAsync(Customer customer)
-        {
-            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
-            if (salesIntegrationEnabled)
-            {
-                var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
-                var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
-                var now = DateTime.Now;
+    //     {
 
-                var name = (customer.Name ?? string.Empty).Trim();
-                if (name.Length > 300) name = name[..300];
-                var phone = string.IsNullOrWhiteSpace(customer.Phone) ? null : customer.Phone.Trim();
+    //         _context = context;
 
-                var row = new CustomerMasterRow
-                {
-                    UniqueID = Guid.NewGuid().ToString(),
-                    CustomerCode = "CUST-0",
-                    CustomerName = name,
-                    MobileNumber = phone,
-                    ActiveStatus = true,
-                    CreatedBy = createdBy,
-                    CreatedDate = now,
-                    ModifiedBy = null,
-                    ModifiedDate = null,
-                    TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
-                };
+    //         _configuration = configuration;
 
-                _context.CustomerMasters.Add(row);
-                await _context.SaveChangesAsync();
-                row.CustomerCode = $"CUST-{row.ID}";
-                await _context.SaveChangesAsync();
+    //     }
 
-                customer.Id = row.ID;
-                customer.Phone = row.MobileNumber ?? string.Empty;
-                customer.CreatedDate = now;
-                return customer;
-            }
 
-            customer.CreatedDate = DateTime.Now;
-            _context.Customers.Add(customer);
-            await _context.SaveChangesAsync();
-            return customer;
-        }
 
-        public async Task<bool> PhoneExistsAsync(string phone)
-        {
-            var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
-            if (salesIntegrationEnabled)
-            {
-                var p = phone.Trim();
-                return await _context.CustomerMasters.AsNoTracking().AnyAsync(c => c.MobileNumber == p);
-            }
+    //     public async Task<List<CustomerSearchResult>> SearchAsync(string query)
 
-            return await _context.Customers.AnyAsync(c => c.Phone == phone);
-        }
-    }
+    //     {
 
-    public class MedicineRepository : IMedicineRepository
-    {
-        private readonly PharmacyDbContext _context;
-        public MedicineRepository(PharmacyDbContext context) => _context = context;
+    //         var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
 
-        public async Task<List<MedicineSearchResult>> SearchAsync(string query)
-        {
-            query = query.Trim().ToLower();
-            return await _context.Medicines
-                .Where(m => m.Name.ToLower().Contains(query)
-                          || (m.GenericName != null && m.GenericName.ToLower().Contains(query))
-                          || (m.Manufacturer != null && m.Manufacturer.ToLower().Contains(query)))
-                .Include(m => m.Batches)
-                .Select(m => new MedicineSearchResult
-                {
-                    Id = m.Id,
-                    Name = m.Name,
-                    GenericName = m.GenericName,
-                    Manufacturer = m.Manufacturer,
-                    Category = m.Category,
-                    Batches = m.Batches.Where(b => b.StripQuantity > 0 && b.ExpiryDate > DateTime.Now)
-                        .Select(b => new BatchSearchResult
-                        {
-                            Id = b.Id,
-                            MedicineId = b.MedicineId,
-                            MedicineName = m.Name,
-                            GenericName = m.GenericName,
-                            BatchNumber = b.BatchNumber,
-                            ExpiryDate = b.ExpiryDate,
-                            StripQuantity = b.StripQuantity,
-                            TabletPerStrip = b.TabletPerStrip,
-                            SellingPriceStrip = b.SellingPriceStrip,
-                            SellingPriceTablet = b.SellingPriceTablet,
-                            Manufacturer = m.Manufacturer,
-                            IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                            IsExpired = b.ExpiryDate <= DateTime.Now,
-                            TotalTablets = b.StripQuantity * b.TabletPerStrip
-                        }).ToList()
-                })
-                .Take(10)
-                .ToListAsync();
-        }
+    //         if (salesIntegrationEnabled)
 
-        public async Task<Medicine?> GetByIdAsync(int id) =>
-            await _context.Medicines.Include(m => m.Batches).FirstOrDefaultAsync(m => m.Id == id);
-    }
+    //         {
 
-    public class BatchRepository : IBatchRepository
-    {
-        private readonly PharmacyDbContext _context;
-        public BatchRepository(PharmacyDbContext context) => _context = context;
+    //             var q = query.Trim();
 
-        public async Task<List<BatchSearchResult>> SearchByBatchNumberAsync(string batchNumber)
-        {
-            batchNumber = batchNumber.Trim().ToLower();
-            return await _context.Batches
-                .Include(b => b.Medicine)
-                .Where(b => b.BatchNumber.ToLower().Contains(batchNumber) && b.StripQuantity > 0)
-                .Select(b => new BatchSearchResult
-                {
-                    Id = b.Id,
-                    MedicineId = b.MedicineId,
-                    MedicineName = b.Medicine!.Name,
-                    GenericName = b.Medicine.GenericName,
-                    BatchNumber = b.BatchNumber,
-                    ExpiryDate = b.ExpiryDate,
-                    StripQuantity = b.StripQuantity,
-                    TabletPerStrip = b.TabletPerStrip,
-                    SellingPriceStrip = b.SellingPriceStrip,
-                    SellingPriceTablet = b.SellingPriceTablet,
-                    Manufacturer = b.Medicine.Manufacturer,
-                    IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                    IsExpired = b.ExpiryDate <= DateTime.Now,
-                    TotalTablets = b.StripQuantity * b.TabletPerStrip
-                })
-                .Take(10)
-                .ToListAsync();
-        }
+    //             var term = q.ToLowerInvariant();
 
-        public async Task<List<BatchSearchResult>> SearchByMedicineAsync(string query)
-        {
-            query = query.Trim().ToLower();
-            return await _context.Batches
-                .Include(b => b.Medicine)
-                .Where(b => (b.Medicine!.Name.ToLower().Contains(query)
-                          || (b.Medicine.GenericName != null && b.Medicine.GenericName.ToLower().Contains(query)))
-                          && b.StripQuantity > 0
-                          && b.ExpiryDate > DateTime.Now)
-                .Select(b => new BatchSearchResult
-                {
-                    Id = b.Id,
-                    MedicineId = b.MedicineId,
-                    MedicineName = b.Medicine!.Name,
-                    GenericName = b.Medicine.GenericName,
-                    BatchNumber = b.BatchNumber,
-                    ExpiryDate = b.ExpiryDate,
-                    StripQuantity = b.StripQuantity,
-                    TabletPerStrip = b.TabletPerStrip,
-                    SellingPriceStrip = b.SellingPriceStrip,
-                    SellingPriceTablet = b.SellingPriceTablet,
-                    Manufacturer = b.Medicine.Manufacturer,
-                    IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                    IsExpired = b.ExpiryDate <= DateTime.Now,
-                    TotalTablets = b.StripQuantity * b.TabletPerStrip
-                })
-                .Take(15)
-                .ToListAsync();
-        }
+    //             return await _context.CustomerMasters
 
-        public async Task<List<BatchSearchResult>> GetBatchesByMedicineIdAsync(int medicineId)
-        {
-            return await _context.Batches
-                .Include(b => b.Medicine)
-                .Where(b => b.MedicineId == medicineId && b.StripQuantity > 0 && b.ExpiryDate > DateTime.Now)
-                .Select(b => new BatchSearchResult
-                {
-                    Id = b.Id,
-                    MedicineId = b.MedicineId,
-                    MedicineName = b.Medicine!.Name,
-                    GenericName = b.Medicine.GenericName,
-                    BatchNumber = b.BatchNumber,
-                    ExpiryDate = b.ExpiryDate,
-                    StripQuantity = b.StripQuantity,
-                    TabletPerStrip = b.TabletPerStrip,
-                    SellingPriceStrip = b.SellingPriceStrip,
-                    SellingPriceTablet = b.SellingPriceTablet,
-                    Manufacturer = b.Medicine.Manufacturer,
-                    IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                    IsExpired = b.ExpiryDate <= DateTime.Now,
-                    TotalTablets = b.StripQuantity * b.TabletPerStrip
-                })
-                .ToListAsync();
-        }
+    //                 .AsNoTracking()
 
-        public async Task<BatchSearchResult?> GetByIdAsync(int id)
-        {
-            return await _context.Batches
-                .Include(b => b.Medicine)
-                .Where(b => b.Id == id)
-                .Select(b => new BatchSearchResult
-                {
-                    Id = b.Id,
-                    MedicineId = b.MedicineId,
-                    MedicineName = b.Medicine!.Name,
-                    GenericName = b.Medicine.GenericName,
-                    BatchNumber = b.BatchNumber,
-                    ExpiryDate = b.ExpiryDate,
-                    StripQuantity = b.StripQuantity,
-                    TabletPerStrip = b.TabletPerStrip,
-                    SellingPriceStrip = b.SellingPriceStrip,
-                    SellingPriceTablet = b.SellingPriceTablet,
-                    Manufacturer = b.Medicine.Manufacturer,
-                    IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                    IsExpired = b.ExpiryDate <= DateTime.Now,
-                    TotalTablets = b.StripQuantity * b.TabletPerStrip
-                })
-                .FirstOrDefaultAsync();
-        }
+    //                 .Where(c => c.ActiveStatus)
 
-        public async Task<List<BatchSearchResult>> AdvancedSearchAsync(string? batchNumber, string? medicineName, string? composition, DateTime? expiryFrom, DateTime? expiryTo)
-        {
-            var query = _context.Batches.Include(b => b.Medicine).Where(b => b.StripQuantity > 0);
+    //                 .Where(c =>
 
-            if (!string.IsNullOrWhiteSpace(batchNumber))
-                query = query.Where(b => b.BatchNumber.ToLower().Contains(batchNumber.ToLower()));
+    //                     c.CustomerName.ToLower().Contains(term) ||
 
-            if (!string.IsNullOrWhiteSpace(medicineName))
-                query = query.Where(b => b.Medicine!.Name.ToLower().Contains(medicineName.ToLower()));
+    //                     (c.MobileNumber != null && c.MobileNumber.Contains(q)))
 
-            if (!string.IsNullOrWhiteSpace(composition))
-                query = query.Where(b => b.Medicine!.GenericName != null && b.Medicine.GenericName.ToLower().Contains(composition.ToLower()));
+    //                 .OrderBy(c => c.CustomerName)
 
-            if (expiryFrom.HasValue)
-                query = query.Where(b => b.ExpiryDate >= expiryFrom.Value);
+    //                 .Take(10)
 
-            if (expiryTo.HasValue)
-                query = query.Where(b => b.ExpiryDate <= expiryTo.Value);
+    //                 .Select(c => new CustomerSearchResult
 
-            return await query.Select(b => new BatchSearchResult
-            {
-                Id = b.Id,
-                MedicineId = b.MedicineId,
-                MedicineName = b.Medicine!.Name,
-                GenericName = b.Medicine.GenericName,
-                BatchNumber = b.BatchNumber,
-                ExpiryDate = b.ExpiryDate,
-                StripQuantity = b.StripQuantity,
-                TabletPerStrip = b.TabletPerStrip,
-                SellingPriceStrip = b.SellingPriceStrip,
-                SellingPriceTablet = b.SellingPriceTablet,
-                Manufacturer = b.Medicine.Manufacturer,
-                IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
-                IsExpired = b.ExpiryDate <= DateTime.Now,
-                TotalTablets = b.StripQuantity * b.TabletPerStrip
-            })
-            .ToListAsync();
-        }
-    }
+    //                 {
+
+    //                     Id = c.ID,
+
+    //                     Name = c.CustomerName,
+
+    //                     Phone = c.MobileNumber ?? string.Empty,
+
+    //                     Email = null,
+
+    //                     LoyaltyPoints = 0
+
+    //                 })
+
+    //                 .ToListAsync();
+
+    //         }
+
+
+
+    //         {
+
+    //             var term = query.Trim().ToLowerInvariant();
+
+    //             return await _context.Customers
+
+    //                 .AsNoTracking()
+
+    //                 .Where(c => c.Name.ToLower().Contains(term)
+
+    //                           || c.Phone.Contains(term)
+
+    //                           || (c.Email != null && c.Email.ToLower().Contains(term)))
+
+    //                 .Select(c => new CustomerSearchResult
+
+    //                 {
+
+    //                     Id = c.Id,
+
+    //                     Name = c.Name,
+
+    //                     Phone = c.Phone,
+
+    //                     Email = c.Email,
+
+    //                     LoyaltyPoints = c.LoyaltyPoints
+
+    //                 })
+
+    //                 .Take(10)
+
+    //                 .ToListAsync();
+
+    //         }
+
+    //     }
+
+
+
+    //     public async Task<Customer?> GetByIdAsync(int id)
+
+    //     {
+
+    //         var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+    //         if (salesIntegrationEnabled)
+
+    //         {
+
+    //             var row = await _context.CustomerMasters.AsNoTracking().FirstOrDefaultAsync(c => c.ID == id);
+
+    //             if (row == null) return null;
+
+    //             return new Customer
+
+    //             {
+
+    //                 Id = row.ID,
+
+    //                 Name = row.CustomerName,
+
+    //                 Phone = row.MobileNumber ?? string.Empty,
+
+    //                 Email = null,
+
+    //                 LoyaltyPoints = 0
+
+    //             };
+
+    //         }
+
+
+
+    //         return await _context.Customers.FindAsync(id);
+
+    //     }
+
+
+
+    //     public async Task<Customer> CreateAsync(Customer customer)
+
+    //     {
+
+    //         var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+    //         if (salesIntegrationEnabled)
+
+    //         {
+
+    //             var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
+
+    //             var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
+
+    //             var now = DateTime.Now;
+
+
+
+    //             var name = (customer.Name ?? string.Empty).Trim();
+
+    //             if (name.Length > 300) name = name[..300];
+
+    //             var phone = string.IsNullOrWhiteSpace(customer.Phone) ? null : customer.Phone.Trim();
+
+
+
+    //             var row = new CustomerMasterRow
+
+    //             {
+
+    //                 UniqueID = Guid.NewGuid().ToString(),
+
+    //                 CustomerCode = "CUST-0",
+
+    //                 CustomerName = name,
+
+    //                 MobileNumber = phone,
+
+    //                 ActiveStatus = true,
+
+    //                 CreatedBy = createdBy,
+
+    //                 CreatedDate = now,
+
+    //                 ModifiedBy = null,
+
+    //                 ModifiedDate = null,
+
+    //                 TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
+
+    //             };
+
+
+
+    //             _context.CustomerMasters.Add(row);
+
+    //             await _context.SaveChangesAsync();
+
+    //             row.CustomerCode = $"CUST-{row.ID}";
+
+    //             await _context.SaveChangesAsync();
+
+
+
+    //             customer.Id = row.ID;
+
+    //             customer.Phone = row.MobileNumber ?? string.Empty;
+
+    //             customer.CreatedDate = now;
+
+    //             return customer;
+
+    //         }
+
+
+
+    //         customer.CreatedDate = DateTime.Now;
+
+    //         _context.Customers.Add(customer);
+
+    //         await _context.SaveChangesAsync();
+
+    //         return customer;
+
+    //     }
+
+
+
+    //     public async Task<bool> PhoneExistsAsync(string phone)
+
+    //     {
+
+    //         var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+    //         if (salesIntegrationEnabled)
+
+    //         {
+
+    //             var p = phone.Trim();
+
+    //             return await _context.CustomerMasters.AsNoTracking().AnyAsync(c => c.MobileNumber == p);
+
+    //         }
+
+
+
+    //         return await _context.Customers.AnyAsync(c => c.Phone == phone);
+
+    //     }
+
+    // }
+
+
+
+    // public class MedicineRepository : IMedicineRepository
+
+    // {
+
+    //     private readonly PharmacyDbContext _context;
+
+    //     public MedicineRepository(PharmacyDbContext context) => _context = context;
+
+
+
+    //     public async Task<List<MedicineSearchResult>> SearchAsync(string query)
+
+    //     {
+
+    //         query = query.Trim().ToLower();
+
+    //         return await _context.Medicines
+
+    //             .Where(m => m.Name.ToLower().Contains(query)
+
+    //                       || (m.GenericName != null && m.GenericName.ToLower().Contains(query))
+
+    //                       || (m.Manufacturer != null && m.Manufacturer.ToLower().Contains(query)))
+
+    //             .Include(m => m.Batches)
+
+    //             .Select(m => new MedicineSearchResult
+
+    //             {
+
+    //                 Id = m.Id,
+
+    //                 Name = m.Name,
+
+    //                 GenericName = m.GenericName,
+
+    //                 Manufacturer = m.Manufacturer,
+
+    //                 Category = m.Category,
+
+    //                 Batches = m.Batches.Where(b => b.StripQuantity > 0 && b.ExpiryDate > DateTime.Now)
+
+    //                     .Select(b => new BatchSearchResult
+
+    //                     {
+
+    //                         Id = b.Id,
+
+    //                         MedicineId = b.MedicineId,
+
+    //                         MedicineName = m.Name,
+
+    //                         GenericName = m.GenericName,
+
+    //                         BatchNumber = b.BatchNumber,
+
+    //                         ExpiryDate = b.ExpiryDate,
+
+    //                         StripQuantity = b.StripQuantity,
+
+    //                         TabletPerStrip = b.TabletPerStrip,
+
+    //                         SellingPriceStrip = b.SellingPriceStrip,
+
+    //                         SellingPriceTablet = b.SellingPriceTablet,
+
+    //                         Manufacturer = m.Manufacturer,
+
+    //                         IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //                         IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //                         TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //                     }).ToList()
+
+    //             })
+
+    //             .Take(10)
+
+    //             .ToListAsync();
+
+    //     }
+
+
+
+    //     public async Task<Medicine?> GetByIdAsync(int id) =>
+
+    //         await _context.Medicines.Include(m => m.Batches).FirstOrDefaultAsync(m => m.Id == id);
+
+    // }
+
+
+
+    // public class BatchRepository : IBatchRepository
+
+    // {
+
+    //     private readonly PharmacyDbContext _context;
+
+    //     public BatchRepository(PharmacyDbContext context) => _context = context;
+
+
+
+    //     public async Task<List<BatchSearchResult>> SearchByBatchNumberAsync(string batchNumber)
+
+    //     {
+
+    //         batchNumber = batchNumber.Trim().ToLower();
+
+    //         return await _context.Batches
+
+    //             .Include(b => b.Medicine)
+
+    //             .Where(b => b.BatchNumber.ToLower().Contains(batchNumber) && b.StripQuantity > 0)
+
+    //             .Select(b => new BatchSearchResult
+
+    //             {
+
+    //                 Id = b.Id,
+
+    //                 MedicineId = b.MedicineId,
+
+    //                 MedicineName = b.Medicine!.Name,
+
+    //                 GenericName = b.Medicine.GenericName,
+
+    //                 BatchNumber = b.BatchNumber,
+
+    //                 ExpiryDate = b.ExpiryDate,
+
+    //                 StripQuantity = b.StripQuantity,
+
+    //                 TabletPerStrip = b.TabletPerStrip,
+
+    //                 SellingPriceStrip = b.SellingPriceStrip,
+
+    //                 SellingPriceTablet = b.SellingPriceTablet,
+
+    //                 Manufacturer = b.Medicine.Manufacturer,
+
+    //                 IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //                 IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //                 TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //             })
+
+    //             .Take(10)
+
+    //             .ToListAsync();
+
+    //     }
+
+
+
+    //     public async Task<List<BatchSearchResult>> SearchByMedicineAsync(string query)
+
+    //     {
+
+    //         query = query.Trim().ToLower();
+
+    //         return await _context.Batches
+
+    //             .Include(b => b.Medicine)
+
+    //             .Where(b => (b.Medicine!.Name.ToLower().Contains(query)
+
+    //                       || (b.Medicine.GenericName != null && b.Medicine.GenericName.ToLower().Contains(query)))
+
+    //                       && b.StripQuantity > 0
+
+    //                       && b.ExpiryDate > DateTime.Now)
+
+    //             .Select(b => new BatchSearchResult
+
+    //             {
+
+    //                 Id = b.Id,
+
+    //                 MedicineId = b.MedicineId,
+
+    //                 MedicineName = b.Medicine!.Name,
+
+    //                 GenericName = b.Medicine.GenericName,
+
+    //                 BatchNumber = b.BatchNumber,
+
+    //                 ExpiryDate = b.ExpiryDate,
+
+    //                 StripQuantity = b.StripQuantity,
+
+    //                 TabletPerStrip = b.TabletPerStrip,
+
+    //                 SellingPriceStrip = b.SellingPriceStrip,
+
+    //                 SellingPriceTablet = b.SellingPriceTablet,
+
+    //                 Manufacturer = b.Medicine.Manufacturer,
+
+    //                 IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //                 IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //                 TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //             })
+
+    //             .Take(15)
+
+    //             .ToListAsync();
+
+    //     }
+
+
+
+    //     public async Task<List<BatchSearchResult>> GetBatchesByMedicineIdAsync(int medicineId)
+
+    //     {
+
+    //         return await _context.Batches
+
+    //             .Include(b => b.Medicine)
+
+    //             .Where(b => b.MedicineId == medicineId && b.StripQuantity > 0 && b.ExpiryDate > DateTime.Now)
+
+    //             .Select(b => new BatchSearchResult
+
+    //             {
+
+    //                 Id = b.Id,
+
+    //                 MedicineId = b.MedicineId,
+
+    //                 MedicineName = b.Medicine!.Name,
+
+    //                 GenericName = b.Medicine.GenericName,
+
+    //                 BatchNumber = b.BatchNumber,
+
+    //                 ExpiryDate = b.ExpiryDate,
+
+    //                 StripQuantity = b.StripQuantity,
+
+    //                 TabletPerStrip = b.TabletPerStrip,
+
+    //                 SellingPriceStrip = b.SellingPriceStrip,
+
+    //                 SellingPriceTablet = b.SellingPriceTablet,
+
+    //                 Manufacturer = b.Medicine.Manufacturer,
+
+    //                 IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //                 IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //                 TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //             })
+
+    //             .ToListAsync();
+
+    //     }
+
+
+
+    //     public async Task<BatchSearchResult?> GetByIdAsync(int id)
+
+    //     {
+
+    //         return await _context.Batches
+
+    //             .Include(b => b.Medicine)
+
+    //             .Where(b => b.Id == id)
+
+    //             .Select(b => new BatchSearchResult
+
+    //             {
+
+    //                 Id = b.Id,
+
+    //                 MedicineId = b.MedicineId,
+
+    //                 MedicineName = b.Medicine!.Name,
+
+    //                 GenericName = b.Medicine.GenericName,
+
+    //                 BatchNumber = b.BatchNumber,
+
+    //                 ExpiryDate = b.ExpiryDate,
+
+    //                 StripQuantity = b.StripQuantity,
+
+    //                 TabletPerStrip = b.TabletPerStrip,
+
+    //                 SellingPriceStrip = b.SellingPriceStrip,
+
+    //                 SellingPriceTablet = b.SellingPriceTablet,
+
+    //                 Manufacturer = b.Medicine.Manufacturer,
+
+    //                 IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //                 IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //                 TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //             })
+
+    //             .FirstOrDefaultAsync();
+
+    //     }
+
+
+
+    //     public async Task<List<BatchSearchResult>> AdvancedSearchAsync(string? batchNumber, string? medicineName, string? composition, DateTime? expiryFrom, DateTime? expiryTo)
+
+    //     {
+
+    //         var query = _context.Batches.Include(b => b.Medicine).Where(b => b.StripQuantity > 0);
+
+
+
+    //         if (!string.IsNullOrWhiteSpace(batchNumber))
+
+    //             query = query.Where(b => b.BatchNumber.ToLower().Contains(batchNumber.ToLower()));
+
+
+
+    //         if (!string.IsNullOrWhiteSpace(medicineName))
+
+    //             query = query.Where(b => b.Medicine!.Name.ToLower().Contains(medicineName.ToLower()));
+
+
+
+    //         if (!string.IsNullOrWhiteSpace(composition))
+
+    //             query = query.Where(b => b.Medicine!.GenericName != null && b.Medicine.GenericName.ToLower().Contains(composition.ToLower()));
+
+
+
+    //         if (expiryFrom.HasValue)
+
+    //             query = query.Where(b => b.ExpiryDate >= expiryFrom.Value);
+
+
+
+    //         if (expiryTo.HasValue)
+
+    //             query = query.Where(b => b.ExpiryDate <= expiryTo.Value);
+
+
+
+    //         return await query.Select(b => new BatchSearchResult
+
+    //         {
+
+    //             Id = b.Id,
+
+    //             MedicineId = b.MedicineId,
+
+    //             MedicineName = b.Medicine!.Name,
+
+    //             GenericName = b.Medicine.GenericName,
+
+    //             BatchNumber = b.BatchNumber,
+
+    //             ExpiryDate = b.ExpiryDate,
+
+    //             StripQuantity = b.StripQuantity,
+
+    //             TabletPerStrip = b.TabletPerStrip,
+
+    //             SellingPriceStrip = b.SellingPriceStrip,
+
+    //             SellingPriceTablet = b.SellingPriceTablet,
+
+    //             Manufacturer = b.Medicine.Manufacturer,
+
+    //             IsNearExpiry = b.ExpiryDate <= DateTime.Now.AddMonths(3),
+
+    //             IsExpired = b.ExpiryDate <= DateTime.Now,
+
+    //             TotalTablets = b.StripQuantity * b.TabletPerStrip
+
+    //         })
+
+    //         .ToListAsync();
+
+    //     }
+
+    // }
+
+
 
     public class SaleRepository : ISaleRepository
     {
@@ -388,9 +720,9 @@ namespace Rxnxt.Business.Implementations
                         ProductName = item.ProductName,
                         BatchNumber = item.BatchNumber,
                         ExpiryDate = item.ExpiryDate,
-                        UomName = item.UomName,
+                        UomName = string.IsNullOrWhiteSpace(item.SaleUomName) ? item.UomName : item.SaleUomName,
                         Quantity = item.Quantity,
-                        UnitType = item.UnitType,
+                        UnitType = string.IsNullOrWhiteSpace(item.SaleUomName) ? item.UnitType : item.SaleUomName,
                         Price = unitPrice,
                         DiscountPercent = item.DiscountPercent,
                         DiscountAmount = discountAmt,
@@ -594,18 +926,91 @@ namespace Rxnxt.Business.Implementations
                             };
                         }
 
-                        var available = stockRow.PackQty ?? 0m;
-                        var required = (decimal)item.Quantity;
-                        if (available < required)
+                        var selectedUomName = (item.SaleUomName ?? item.UomName ?? string.Empty).Trim();
+                        if (string.IsNullOrWhiteSpace(selectedUomName))
                         {
                             return new SaleResult
                             {
                                 Success = false,
-                                Message = $"Insufficient stock for {item.ProductName} / {item.BatchNumber}. Available {available:0.##}, Required {required:0.##}"
+                                Message = $"Unit is missing for {item.ProductName} / {item.BatchNumber}"
                             };
                         }
 
-                        stockRow.PackQty = available - required;
+                        var pm = await _context.ProductMasters
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(p => p.UniqueID == productIdStr);
+
+                        decimal requiredBaseQty;
+                        if (pm == null)
+                        {
+                            // Fallback: no conversion info, assume API unit matches stock unit.
+                            requiredBaseQty = item.Quantity;
+                        }
+                        else
+                        {
+                            var baseUomId = (pm.UOMID ?? string.Empty).Trim();
+                            var otherUomId = (pm.OtherUOMID ?? string.Empty).Trim();
+                            var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+                            if (factor <= 0) factor = 1m;
+
+                            var uomIds = new[] { baseUomId, otherUomId }
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+
+                            var uomNameById = uomIds.Count == 0
+                                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                : await _context.UomMasters
+                                    .AsNoTracking()
+                                    .Where(u => uomIds.Contains(u.UniqueID))
+                                    .Select(u => new { u.UniqueID, u.UOMName })
+                                    .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                            var baseName = (!string.IsNullOrWhiteSpace(baseUomId) && uomNameById.TryGetValue(baseUomId, out var bn)) ? bn : string.Empty;
+                            var otherName = (!string.IsNullOrWhiteSpace(otherUomId) && uomNameById.TryGetValue(otherUomId, out var on)) ? on : string.Empty;
+
+                            bool Matches(string a, string b) =>
+                                !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
+                                string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                            if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
+                            {
+                                requiredBaseQty = item.Quantity;
+                            }
+                            else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
+                            {
+                                if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
+                                {
+                                    return new SaleResult
+                                    {
+                                        Success = false,
+                                        Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
+                                    };
+                                }
+
+                                requiredBaseQty = item.Quantity / factor;
+                            }
+                            else
+                            {
+                                return new SaleResult
+                                {
+                                    Success = false,
+                                    Message = $"Invalid unit '{selectedUomName}' for {item.ProductName}."
+                                };
+                            }
+                        }
+
+                        var available = stockRow.PackQty ?? 0m;
+                        if (available < requiredBaseQty)
+                        {
+                            return new SaleResult
+                            {
+                                Success = false,
+                                Message = $"Insufficient stock for {item.ProductName} / {item.BatchNumber}. Available {available:0.##}, Required {requiredBaseQty:0.##}"
+                            };
+                        }
+
+                        stockRow.PackQty = available - requiredBaseQty;
                     }
 
                     var detailBaseSum = baseSum;
@@ -624,6 +1029,69 @@ namespace Rxnxt.Business.Implementations
                         decimal taxable = afterAllDiscounts - includedTax;
                         decimal total = afterAllDiscounts;
 
+                        var selectedUomName = (item.SaleUomName ?? item.UomName ?? string.Empty).Trim();
+                        if (string.IsNullOrWhiteSpace(selectedUomName)) selectedUomName = item.UomName;
+
+                        var productIdStr = item.ProductId.ToString();
+                        var pm = await _context.ProductMasters
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(p => p.UniqueID == productIdStr);
+
+                        decimal requiredBaseQty;
+                        if (pm == null)
+                        {
+                            requiredBaseQty = item.Quantity;
+                        }
+                        else
+                        {
+                            var baseUomId = (pm.UOMID ?? string.Empty).Trim();
+                            var otherUomId = (pm.OtherUOMID ?? string.Empty).Trim();
+                            var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+                            if (factor <= 0) factor = 1m;
+
+                            var uomIds = new[] { baseUomId, otherUomId }
+                                .Where(x => !string.IsNullOrWhiteSpace(x))
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+
+                            var uomNameById = uomIds.Count == 0
+                                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                : await _context.UomMasters
+                                    .AsNoTracking()
+                                    .Where(u => uomIds.Contains(u.UniqueID))
+                                    .Select(u => new { u.UniqueID, u.UOMName })
+                                    .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                            var baseName = (!string.IsNullOrWhiteSpace(baseUomId) && uomNameById.TryGetValue(baseUomId, out var bn)) ? bn : string.Empty;
+                            var otherName = (!string.IsNullOrWhiteSpace(otherUomId) && uomNameById.TryGetValue(otherUomId, out var on)) ? on : string.Empty;
+
+                            bool Matches(string a, string b) =>
+                                !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
+                                string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                            if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
+                            {
+                                requiredBaseQty = item.Quantity;
+                            }
+                            else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
+                            {
+                                if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
+                                {
+                                    return new SaleResult
+                                    {
+                                        Success = false,
+                                        Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
+                                    };
+                                }
+
+                                requiredBaseQty = item.Quantity / factor;
+                            }
+                            else
+                            {
+                                requiredBaseQty = item.Quantity;
+                            }
+                        }
+
                         var halfTax = includedTax / 2;
 
                         _context.SaleDetails.Add(new SaleDetailRow
@@ -640,10 +1108,10 @@ namespace Rxnxt.Business.Implementations
                             SalePrice = unitPrice,
                             FreeQty = 0,
                             Remarks = null,
-                            Qty = item.Quantity,
+                            Qty = requiredBaseQty,
                             TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
                             BaseUOMID = null,
-                            SaleUOMID = item.UomName,
+                            SaleUOMID = selectedUomName,
                             SaleUOMQty = item.Quantity,
                             ItemDiscPerc = Math.Round(item.DiscountPercent, 2),
                             ItemDiscAmount = Math.Round(discountAmt, 2),
@@ -859,7 +1327,7 @@ namespace Rxnxt.Business.Implementations
                     BatchNumber = d.BatchNumber ?? string.Empty,
                     ExpiryDate = d.ExpiryDate ?? DateTime.Today,
                     UomName = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
-                    Quantity = (int)Math.Round(d.Qty ?? 0, 0),
+                    Quantity = (int)Math.Round(d.SaleUOMQty ?? d.Qty ?? 0, 0),
                     UnitType = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
                     Price = d.SalePrice ?? d.MRP ?? 0,
                     DiscountPercent = d.ItemDiscPerc ?? 0,

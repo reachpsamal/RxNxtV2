@@ -8,6 +8,8 @@ using System.Text.Json;
 using System.Globalization;
 using Rxnxt.Web.Pdf;
 using QuestPDF.Fluent;
+using Rxnxt.Business.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Rxnxt.Web.Controllers
 {
@@ -16,12 +18,14 @@ namespace Rxnxt.Web.Controllers
         private readonly CustomerService _customerService;
         private readonly SaleService _saleService;
         private readonly StockService _stockService;
+        private readonly PharmacyDbContext _db;
 
-        public SalesController(CustomerService customerService, SaleService saleService, StockService stockService)
+        public SalesController(CustomerService customerService, SaleService saleService, StockService stockService, PharmacyDbContext db)
         {
             _customerService = customerService;
             _saleService = saleService;
             _stockService = stockService;
+            _db = db;
         }
 
         public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -107,6 +111,53 @@ namespace Rxnxt.Web.Controllers
 
             var vm = StockDetailsViewModel.FromDto(match);
             return PartialView("_StockDetailsPayload", vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetProductUomOptions(Guid productId, CancellationToken cancellationToken)
+        {
+            _ = cancellationToken;
+            if (productId == Guid.Empty) return BadRequest();
+
+            var pid = productId.ToString();
+            var pm = await _db.ProductMasters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UniqueID == pid);
+
+            if (pm == null)
+            {
+                return Json(new { ok = false, message = "Product not found" }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            }
+
+            var baseId = (pm.UOMID ?? string.Empty).Trim();
+            var otherId = (pm.OtherUOMID ?? string.Empty).Trim();
+            var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+
+            var uomIds = new[] { baseId, otherId }
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var names = uomIds.Count == 0
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : await _db.UomMasters
+                    .AsNoTracking()
+                    .Where(u => uomIds.Contains(u.UniqueID))
+                    .Select(u => new { u.UniqueID, u.UOMName })
+                    .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+            var baseName = (!string.IsNullOrWhiteSpace(baseId) && names.TryGetValue(baseId, out var bn)) ? bn : string.Empty;
+            var otherName = (!string.IsNullOrWhiteSpace(otherId) && names.TryGetValue(otherId, out var on)) ? on : string.Empty;
+
+            return Json(new
+            {
+                ok = true,
+                baseUomName = baseName,
+                otherUomName = otherName,
+                conversionFactor = factor,
+                uomId = baseId,
+                otherUomId = otherId
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         }
 
         [HttpGet]

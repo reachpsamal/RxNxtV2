@@ -191,6 +191,29 @@ public sealed class ProductMasterRow
 
     [StringLength(300)]
     public string? ProductName { get; set; }
+
+    [StringLength(50)]
+    public string? UOMID { get; set; }
+
+    [StringLength(50)]
+    public string? OtherUOMID { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ConversionFactor { get; set; }
+}
+
+[Table("UOMMaster")]
+public sealed class UomMasterRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    public string? UOMName { get; set; }
 }
 
 [Table("CustomerMaster")]

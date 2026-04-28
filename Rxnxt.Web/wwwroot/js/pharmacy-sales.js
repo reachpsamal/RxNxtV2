@@ -9,6 +9,102 @@ let selectedPaymentMethod = 'Cash';
 let currentBatchInfo = null;
 let editingSaleId = null;
 let isPrefillingEditSale = false;
+
+const productUomOptionsCache = new Map();
+
+function normalizeUomName(name) {
+    return (name || '').toString().trim();
+}
+
+function getCachedUomOptions(productId) {
+    if (!productId) return null;
+    return productUomOptionsCache.get(String(productId).toLowerCase()) || null;
+}
+
+function fetchUomOptions(productId) {
+    if (!productId) return Promise.resolve(null);
+    const key = String(productId).toLowerCase();
+    const cached = productUomOptionsCache.get(key);
+    if (cached && cached.__loaded) return Promise.resolve(cached);
+    if (cached && cached.__loading) return cached.__loading;
+
+    const p = fetch(`${MVC_BASE}/GetProductUomOptions?productId=${encodeURIComponent(productId)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (!data || !data.ok) {
+                const fallback = { __loaded: true, baseUomName: '', otherUomName: '', conversionFactor: 1 };
+                productUomOptionsCache.set(key, fallback);
+                return fallback;
+            }
+            const opt = {
+                __loaded: true,
+                baseUomName: normalizeUomName(data.baseUomName),
+                otherUomName: normalizeUomName(data.otherUomName),
+                conversionFactor: parseFloat(data.conversionFactor) || 1
+            };
+            productUomOptionsCache.set(key, opt);
+            return opt;
+        })
+        .catch(() => {
+            const fallback = { __loaded: true, baseUomName: '', otherUomName: '', conversionFactor: 1 };
+            productUomOptionsCache.set(key, fallback);
+            return fallback;
+        });
+
+    productUomOptionsCache.set(key, { __loading: p });
+    return p;
+}
+
+function updateStockItemUom(index, value) {
+    const item = saleItems[index];
+    if (!item || !item.productId) return;
+    const prevSaleUnit = normalizeUomName(item.saleUomName) || normalizeUomName(item.uomName);
+    const v = normalizeUomName(value);
+    item.saleUomName = v;
+    item.unitType = v;
+    item.uomName = item.uomName || v;
+
+    const uomOpt = getCachedUomOptions(item.productId);
+    let baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
+    let otherUnit = normalizeUomName(uomOpt?.otherUomName);
+    if (baseUnit && otherUnit && baseUnit.toLowerCase() === 'pcs' && otherUnit.toLowerCase() !== 'pcs') {
+        const tmp = baseUnit;
+        baseUnit = otherUnit;
+        otherUnit = tmp;
+    }
+    const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+    const currentPrice = parseFloat(item.price) || 0;
+    const basePrice = parseFloat(item.basePrice);
+    const hasBasePrice = Number.isFinite(basePrice) && basePrice > 0;
+    const canConvert = otherUnit && baseUnit && factor > 0;
+
+    // If basePrice isn't canonicalized yet, reconstruct it from the price in the *previous* unit.
+    if (!hasBasePrice && canConvert) {
+        if (prevSaleUnit && prevSaleUnit.toLowerCase() === otherUnit.toLowerCase()) {
+            item.basePrice = parseFloat((currentPrice * factor).toFixed(2));
+        } else {
+            item.basePrice = currentPrice;
+        }
+        item.__basePriceCanonicalized = true;
+    } else if (hasBasePrice && item.__basePriceCanonicalized !== true) {
+        // Preserve existing canonical basePrice if it already exists.
+        item.__basePriceCanonicalized = true;
+    }
+
+    const resolvedBasePrice = parseFloat(item.basePrice) || 0;
+
+    if (otherUnit && baseUnit && v.toLowerCase() === otherUnit.toLowerCase() && factor > 0) {
+        item.price = parseFloat((resolvedBasePrice / factor).toFixed(2));
+    } else {
+        item.price = resolvedBasePrice;
+    }
+
+    recalculateItem(index);
+
+    renderSaleItems();
+    recalculateBill();
+    updateSaleItemsSummary();
+}
 let selectedUnitType = 'PCS';
 let debounceTimer = null;
 let suppressBatchAutoSelectUntil = 0;
@@ -504,7 +600,14 @@ function addToCart() {
     if (qty <= 0) { showToast('Please enter a valid quantity', 'error'); return; }
 
     const maxQty = readStockQty(currentBatchInfo);
-    if (qty > maxQty) { showToast(`Only ${maxQty} ${unitType.toLowerCase()}s available`, 'error'); return; }
+    const uomOpt = getCachedUomOptions(currentBatchInfo.productId);
+    const baseUnit = normalizeUomName(readStockUom(currentBatchInfo)) || normalizeUomName(uomOpt?.baseUomName);
+    const otherUnit = normalizeUomName(uomOpt?.otherUomName);
+    const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+    const effectiveMaxQty = (otherUnit && baseUnit && normalizeUomName(selectedUnitType).toLowerCase() === otherUnit.toLowerCase() && factor > 0)
+        ? (maxQty * factor)
+        : maxQty;
+    if (qty > effectiveMaxQty) { showToast(`Only ${effectiveMaxQty} ${unitType.toLowerCase()}s available`, 'error'); return; }
 
     // Check if already in cart
     const existingIndex = saleItems.findIndex(i => i.productId === currentBatchInfo.productId && i.batchNumber === currentBatchInfo.batchNumber && i.uomName === readStockUom(currentBatchInfo));
@@ -512,7 +615,11 @@ function addToCart() {
     if (existingIndex >= 0) {
         saleItems[existingIndex].quantity = qty;
         saleItems[existingIndex].unitType = unitType;
-        saleItems[existingIndex].price = readStockMrp(currentBatchInfo);
+        if (!saleItems[existingIndex].saleUomName) {
+            saleItems[existingIndex].saleUomName = saleItems[existingIndex].uomName || readStockUom(currentBatchInfo);
+        }
+        saleItems[existingIndex].basePrice = readStockMrp(currentBatchInfo);
+        saleItems[existingIndex].price = saleItems[existingIndex].basePrice;
         saleItems[existingIndex].availableQty = maxQty;
         // keep existing slab unless the item didn't have it before
         if (saleItems[existingIndex].taxPercent === undefined || saleItems[existingIndex].taxPercent === null) {
@@ -529,8 +636,10 @@ function addToCart() {
             batchNumber: currentBatchInfo.batchNumber,
             expiryDate: currentBatchInfo.expiryDate,
             uomName: readStockUom(currentBatchInfo),
+            saleUomName: readStockUom(currentBatchInfo),
             quantity: qty,
             unitType: unitType,
+            basePrice: price,
             price: price,
             discountPercent: 0,
             discountAmount: 0,
@@ -598,7 +707,11 @@ function addFromAdvancedSearch(productId, batchNumber) {
             const newQty = Math.min((saleItems[existingIndex].quantity || 0) + 1, availableQty);
             saleItems[existingIndex].quantity = newQty;
             saleItems[existingIndex].unitType = fixedUnit;
-            saleItems[existingIndex].price = readStockMrp(currentBatchInfo);
+            if (!saleItems[existingIndex].saleUomName) {
+                saleItems[existingIndex].saleUomName = saleItems[existingIndex].uomName || fixedUnit;
+            }
+            saleItems[existingIndex].basePrice = readStockMrp(currentBatchInfo);
+            saleItems[existingIndex].price = saleItems[existingIndex].basePrice;
             saleItems[existingIndex].availableQty = availableQty;
             if (saleItems[existingIndex].taxPercent === undefined || saleItems[existingIndex].taxPercent === null) {
                 saleItems[existingIndex].taxPercent = currentBatchInfo.taxPercent ?? 0;
@@ -614,8 +727,10 @@ function addFromAdvancedSearch(productId, batchNumber) {
                 batchNumber: batchNo,
                 expiryDate: currentBatchInfo.expiryDate,
                 uomName: fixedUnit,
+                saleUomName: fixedUnit,
                 quantity: 1,
                 unitType: fixedUnit,
+                basePrice: price,
                 price: price,
                 discountPercent: 0,
                 discountAmount: 0,
@@ -715,7 +830,26 @@ function getMaxQtyForItem(item) {
     const stockQty = item.availableQty ?? item.availableQty;
     if (stockQty !== undefined && stockQty !== null) {
         const n = parseFloat(stockQty);
-        return Number.isFinite(n) ? n : 0;
+        const baseQty = Number.isFinite(n) ? n : 0;
+
+        if (item.productId) {
+            const uomOpt = getCachedUomOptions(item.productId);
+            let baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
+            let otherUnit = normalizeUomName(uomOpt?.otherUomName);
+            if (baseUnit && otherUnit && baseUnit.toLowerCase() === 'pcs' && otherUnit.toLowerCase() !== 'pcs') {
+                const tmp = baseUnit;
+                baseUnit = otherUnit;
+                otherUnit = tmp;
+            }
+            const saleUnit = normalizeUomName(item.saleUomName) || baseUnit;
+            const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+
+            if (otherUnit && baseUnit && saleUnit.toLowerCase() === otherUnit.toLowerCase() && factor > 0) {
+                return baseQty * factor;
+            }
+        }
+
+        return baseQty;
     }
 
     const stripQty = item.stripQuantity ?? item.availableQuantity ?? 0;
@@ -770,8 +904,47 @@ function renderSaleItems() {
 
     saleItems.forEach((item, index) => {
         const displayName = item.productName || item.medicineName || '';
-        const displayUnit = item.uomName || item.unitType || 'PCS';
+        const displayUnit = item.saleUomName || item.uomName || item.unitType || 'PCS';
         const isStockItem = !!item.productId;
+        const uomOpt = isStockItem ? getCachedUomOptions(item.productId) : null;
+        let baseUnitName = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName) || 'PCS';
+        let otherUnitName = normalizeUomName(uomOpt?.otherUomName);
+        if (baseUnitName && otherUnitName && baseUnitName.toLowerCase() === 'pcs' && otherUnitName.toLowerCase() !== 'pcs') {
+            const tmp = baseUnitName;
+            baseUnitName = otherUnitName;
+            otherUnitName = tmp;
+        }
+        const canSwitchStockUom = !!(uomOpt && uomOpt.__loaded && otherUnitName && otherUnitName.toLowerCase() !== baseUnitName.toLowerCase());
+        const currentSaleUnit = normalizeUomName(item.saleUomName) || normalizeUomName(item.uomName) || baseUnitName;
+
+        if (isStockItem && uomOpt && uomOpt.__loaded) {
+            const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+            const currentPrice = parseFloat(item.price) || 0;
+
+            if (!item.__basePriceCanonicalized && factor > 0) {
+                if (otherUnitName && currentSaleUnit.toLowerCase() === otherUnitName.toLowerCase()) {
+                    item.basePrice = parseFloat((currentPrice * factor).toFixed(2));
+                } else {
+                    item.basePrice = currentPrice;
+                }
+                item.__basePriceCanonicalized = true;
+            }
+
+            const basePrice = parseFloat(item.basePrice);
+            if (Number.isFinite(basePrice) && basePrice > 0) {
+                if (otherUnitName && currentSaleUnit.toLowerCase() === otherUnitName.toLowerCase() && factor > 0) {
+                    item.price = parseFloat((basePrice / factor).toFixed(2));
+                } else {
+                    item.price = basePrice;
+                }
+            }
+        }
+
+        if (isStockItem && !uomOpt) {
+            fetchUomOptions(item.productId).then(() => {
+                renderSaleItems();
+            });
+        }
         tbody.append(`
             <tr class="row-highlight">
                 <td style="color:var(--gray-400); font-weight:600;">${index + 1}</td>
@@ -783,7 +956,11 @@ function renderSaleItems() {
                     <div style="font-size:0.72rem; color: var(--gray-400); margin-top:2px;">Exp: ${formatExpiryDate(item.expiryDate)}</div>
                 </td>
                 <td>
-                    ${isStockItem ? `<span style="font-weight:700;color:var(--gray-700);">${displayUnit}</span>` : `
+                    ${isStockItem ? (canSwitchStockUom ? `
+                    <select class="item-unit-select" onchange="updateStockItemUom(${index}, this.value)" id="unit-${index}">
+                        <option value="${baseUnitName}" ${currentSaleUnit === baseUnitName ? 'selected' : ''}>${baseUnitName}</option>
+                        <option value="${otherUnitName}" ${currentSaleUnit === otherUnitName ? 'selected' : ''}>${otherUnitName}</option>
+                    </select>` : `<span style="font-weight:700;color:var(--gray-700);">${displayUnit}</span>`) : `
                     <select class="item-unit-select" onchange="updateItemUnitType(${index}, this.value)" id="unit-${index}">
                         <option value="Strip" ${item.unitType === 'Strip' ? 'selected' : ''}>Strip</option>
                         <option value="Tablet" ${item.unitType === 'Tablet' ? 'selected' : ''}>Tablet</option>
@@ -1272,6 +1449,7 @@ function completeSale() {
             batchNumber: i.batchNumber,
             expiryDate: i.expiryDate,
             uomName: i.uomName,
+            saleUomName: i.saleUomName || i.uomName,
             unitPrice: i.price,
             quantity: i.quantity,
             unitType: i.unitType,
@@ -1486,6 +1664,7 @@ function loadSaleForEdit(saleId) {
                     batchNumber: i.batchNumber,
                     expiryDate: i.expiryDate,
                     uomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
+                    saleUomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
                     quantity: qty,
                     unitType: i.unitType || (i.uomName || 'PCS'),
                     price: price,
@@ -1561,7 +1740,7 @@ function loadSaleForEdit(saleId) {
             renderSaleItems();
             recalculateBill();
             updateCompleteSaleBtn();
-            switchMedicineTab('batch');
+            switchMedicineTab('direct');
 
             isPrefillingEditSale = false;
         })
