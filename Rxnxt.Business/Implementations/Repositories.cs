@@ -706,6 +706,7 @@ namespace Rxnxt.Business.Implementations
                     decimal discountAmt = lineTotal * (item.DiscountPercent / 100);
                     decimal afterItemDisc = Math.Max(0, lineTotal - discountAmt);
                     decimal includedTax = item.TaxPercent > 0 ? (afterItemDisc * (item.TaxPercent / (100 + item.TaxPercent))) : 0;
+                    includedTax = Math.Round(includedTax, 2, MidpointRounding.AwayFromZero);
                     decimal total = afterItemDisc;
 
                     subTotal += lineTotal;
@@ -746,6 +747,7 @@ namespace Rxnxt.Business.Implementations
                     var afterAllDiscounts = Math.Max(0, baseAfterItemDisc - share);
                     var gst = saleItems[i].TaxPercent;
                     var includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+                    includedTax = Math.Round(includedTax, 2, MidpointRounding.AwayFromZero);
                     saleItems[i].TaxAmount = includedTax;
                     saleItems[i].Total = afterAllDiscounts;
                     totalTaxAfterAllDiscounts += includedTax;
@@ -840,6 +842,169 @@ namespace Rxnxt.Business.Implementations
                         header = existingHeader;
 
                         var oldDetails = await _context.SaleDetails.Where(d => d.SaleID == headerUniqueId).ToListAsync();
+                        var oldPayments = await _context.SalePayments.Where(p => p.SaleId == headerUniqueId).ToListAsync();
+
+                        if (request.ReturnMode)
+                        {
+                            if (!string.Equals((header.CustomerID ?? string.Empty).Trim(), (customerIdStr ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                            {
+                                return new SaleResult { Success = false, Message = "Return mode: customer cannot be changed." };
+                            }
+
+                            if (header.ExtraLess != request.AdditionalDiscount)
+                            {
+                                return new SaleResult { Success = false, Message = "Return mode: additional discount cannot be changed." };
+                            }
+
+                            var oldKeySet = oldDetails
+                                .Select(d => $"{(d.ProductID ?? string.Empty).Trim().ToLowerInvariant()}|{NormalizeBatch(d.BatchNumber).Trim().ToLowerInvariant()}|{d.ExpiryDate?.Date:yyyyMMdd}")
+                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                            var newKeySet = request.Items
+                                .Select(i => $"{i.ProductId.ToString().Trim().ToLowerInvariant()}|{NormalizeBatch(i.BatchNumber).Trim().ToLowerInvariant()}|{i.ExpiryDate.Date:yyyyMMdd}")
+                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                            if (!oldKeySet.SetEquals(newKeySet))
+                            {
+                                return new SaleResult { Success = false, Message = "Return mode: items cannot be added/removed/changed." };
+                            }
+
+                            foreach (var i in request.Items)
+                            {
+                                var newUnit = (i.SaleUomName ?? i.UomName ?? string.Empty).Trim();
+                                var old = oldDetails.FirstOrDefault(d =>
+                                    string.Equals((d.ProductID ?? string.Empty).Trim(), i.ProductId.ToString().Trim(), StringComparison.OrdinalIgnoreCase) &&
+                                    string.Equals(NormalizeBatch(d.BatchNumber), NormalizeBatch(i.BatchNumber), StringComparison.OrdinalIgnoreCase) &&
+                                    d.ExpiryDate.HasValue &&
+                                    d.ExpiryDate.Value.Date == i.ExpiryDate.Date);
+
+                                if (old == null)
+                                {
+                                    return new SaleResult { Success = false, Message = "Return mode: invalid item." };
+                                }
+
+                                bool UnitMatches(string a, string b) =>
+                                    !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
+                                    string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                                var oldUnit = (old.SaleUOMID ?? string.Empty).Trim();
+                                var oldUnitPrice = old.SalePrice ?? old.MRP ?? 0m;
+
+                                // Price is locked in return mode, except when the user switches unit.
+                                // In that case, allow the unit price to change only by the expected conversion factor.
+                                if (UnitMatches(oldUnit, newUnit))
+                                {
+                                    if (Math.Abs(oldUnitPrice - i.UnitPrice) > 0.01m)
+                                    {
+                                        return new SaleResult { Success = false, Message = "Return mode: price cannot be changed." };
+                                    }
+                                }
+                                else
+                                {
+                                    var productIdStr = i.ProductId.ToString();
+                                    var pm = await _context.ProductMasters
+                                        .AsNoTracking()
+                                        .FirstOrDefaultAsync(p => p.UniqueID == productIdStr);
+
+                                    if (pm == null)
+                                    {
+                                        return new SaleResult { Success = false, Message = "Return mode: price cannot be changed." };
+                                    }
+
+                                    var baseUomId = (pm.UOMID ?? string.Empty).Trim();
+                                    var otherUomId = (pm.OtherUOMID ?? string.Empty).Trim();
+                                    var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+                                    if (factor <= 0) factor = 1m;
+
+                                    var uomIds = new[] { baseUomId, otherUomId }
+                                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                                        .ToList();
+
+                                    var uomNameById = uomIds.Count == 0
+                                        ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                        : await _context.UomMasters
+                                            .AsNoTracking()
+                                            .Where(u => uomIds.Contains(u.UniqueID))
+                                            .Select(u => new { u.UniqueID, u.UOMName })
+                                            .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                                    var baseName = (!string.IsNullOrWhiteSpace(baseUomId) && uomNameById.TryGetValue(baseUomId, out var bn)) ? bn : string.Empty;
+                                    var otherName = (!string.IsNullOrWhiteSpace(otherUomId) && uomNameById.TryGetValue(otherUomId, out var on)) ? on : string.Empty;
+
+                                    // Heuristic: treat the larger unit as base for conversion (same as frontend).
+                                    if (!string.IsNullOrWhiteSpace(baseName) && !string.IsNullOrWhiteSpace(otherName) &&
+                                        string.Equals(baseName.Trim(), "PCS", StringComparison.OrdinalIgnoreCase) &&
+                                        !string.Equals(otherName.Trim(), "PCS", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        (baseName, otherName) = (otherName, baseName);
+                                    }
+
+                                    decimal expected;
+                                    var canConvert = !string.IsNullOrWhiteSpace(baseName) && !string.IsNullOrWhiteSpace(otherName) && factor > 0m;
+                                    if (!canConvert)
+                                    {
+                                        return new SaleResult { Success = false, Message = "Return mode: price cannot be changed." };
+                                    }
+
+                                    if (UnitMatches(oldUnit, baseName) && UnitMatches(newUnit, otherName))
+                                    {
+                                        expected = oldUnitPrice / factor;
+                                    }
+                                    else if (UnitMatches(oldUnit, otherName) && UnitMatches(newUnit, baseName))
+                                    {
+                                        expected = oldUnitPrice * factor;
+                                    }
+                                    else
+                                    {
+                                        return new SaleResult { Success = false, Message = "Return mode: price cannot be changed." };
+                                    }
+
+                                    expected = Math.Round(expected, 2, MidpointRounding.AwayFromZero);
+                                    if (Math.Abs(expected - i.UnitPrice) > 0.02m)
+                                    {
+                                        return new SaleResult { Success = false, Message = "Return mode: price cannot be changed." };
+                                    }
+                                }
+
+                                if (Math.Abs((old.ItemDiscPerc ?? 0m) - i.DiscountPercent) > 0.01m)
+                                {
+                                    return new SaleResult { Success = false, Message = "Return mode: discount cannot be changed." };
+                                }
+
+                                if (Math.Abs((old.TaxPerc ?? 0m) - i.TaxPercent) > 0.01m)
+                                {
+                                    return new SaleResult { Success = false, Message = "Return mode: tax cannot be changed." };
+                                }
+                            }
+
+                            var oldModes = oldPayments
+                                .Select(p => ((p.PaymentMode ?? string.Empty).Trim(), (p.ReferenceNo ?? string.Empty).Trim()))
+                                .OrderBy(x => x.Item1, StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(x => x.Item2, StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+
+                            var newModes = request.Payments
+                                .Select(p => ((p.PaymentMode ?? string.Empty).Trim(), (p.Reference ?? string.Empty).Trim()))
+                                .OrderBy(x => x.Item1, StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(x => x.Item2, StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+
+                            if (oldModes.Count != newModes.Count)
+                            {
+                                return new SaleResult { Success = false, Message = "Return mode: payment methods cannot be changed." };
+                            }
+
+                            for (var idx = 0; idx < oldModes.Count; idx++)
+                            {
+                                if (!string.Equals(oldModes[idx].Item1, newModes[idx].Item1, StringComparison.OrdinalIgnoreCase) ||
+                                    !string.Equals(oldModes[idx].Item2, newModes[idx].Item2, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return new SaleResult { Success = false, Message = "Return mode: payment methods cannot be changed." };
+                                }
+                            }
+                        }
+
                         foreach (var d in oldDetails)
                         {
                             var stockRow = await FindStockAsync(d.ProductID, d.BatchNumber, d.ExpiryDate);
@@ -874,8 +1039,6 @@ namespace Rxnxt.Business.Implementations
                         await _context.SaveChangesAsync();
 
                         if (oldDetails.Count > 0) _context.SaleDetails.RemoveRange(oldDetails);
-
-                        var oldPayments = await _context.SalePayments.Where(p => p.SaleId == headerUniqueId).ToListAsync();
                         if (oldPayments.Count > 0) _context.SalePayments.RemoveRange(oldPayments);
 
                         await _context.SaveChangesAsync();
@@ -988,7 +1151,10 @@ namespace Rxnxt.Business.Implementations
                                     };
                                 }
 
-                                requiredBaseQty = item.Quantity / factor;
+                                var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                var mappingReversed = baseIsPcs && !otherIsPcs;
+                                requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
                             }
                             else
                             {
@@ -1026,6 +1192,7 @@ namespace Rxnxt.Business.Implementations
                         var afterAllDiscounts = Math.Max(0, afterItemDisc - share);
                         var gst = item.TaxPercent;
                         decimal includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+                        includedTax = Math.Round(includedTax, 2, MidpointRounding.AwayFromZero);
                         decimal taxable = afterAllDiscounts - includedTax;
                         decimal total = afterAllDiscounts;
 
@@ -1084,7 +1251,10 @@ namespace Rxnxt.Business.Implementations
                                     };
                                 }
 
-                                requiredBaseQty = item.Quantity / factor;
+                                var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                var mappingReversed = baseIsPcs && !otherIsPcs;
+                                requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
                             }
                             else
                             {
@@ -1092,7 +1262,8 @@ namespace Rxnxt.Business.Implementations
                             }
                         }
 
-                        var halfTax = includedTax / 2;
+                        var halfTax = Math.Round(includedTax / 2, 2, MidpointRounding.AwayFromZero);
+                        var otherHalfTax = Math.Round(includedTax - halfTax, 2, MidpointRounding.AwayFromZero);
 
                         _context.SaleDetails.Add(new SaleDetailRow
                         {
@@ -1117,7 +1288,7 @@ namespace Rxnxt.Business.Implementations
                             ItemDiscAmount = Math.Round(discountAmt, 2),
                             TaxableAmount = taxable,
                             CGSTAmount = halfTax,
-                            SGSTAmount = halfTax,
+                            SGSTAmount = otherHalfTax,
                             IGSTAmount = 0,
                             TotalTaxAmount = includedTax,
                             ItemTotal = total,

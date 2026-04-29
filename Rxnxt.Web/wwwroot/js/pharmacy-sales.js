@@ -9,6 +9,7 @@ let selectedPaymentMethod = 'Cash';
 let currentBatchInfo = null;
 let editingSaleId = null;
 let isPrefillingEditSale = false;
+let isReturnMode = false;
 
 const productUomOptionsCache = new Map();
 
@@ -139,6 +140,12 @@ window.addEventListener('unhandledrejection', function (e) {
 // ============ UTILITIES ============
 function formatCurrency(amount) {
     return '₹ ' + parseFloat(amount || 0).toFixed(2);
+}
+
+function round2(amount) {
+    const n = parseFloat(amount);
+    if (!Number.isFinite(n)) return 0;
+    return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
 function readStockValue(obj, ...keys) {
@@ -309,6 +316,10 @@ function selectCustomer(id) {
 }
 
 function removeCustomer() {
+    if (isReturnMode) {
+        showToast('Return mode: customer cannot be changed', 'warning');
+        return;
+    }
     selectedCustomer = null;
     $('#selectedCustomerCard').hide().empty();
     $('#customerSearch').val('').show();
@@ -445,6 +456,9 @@ function saveNewCustomer() {
 
 // ============ MEDICINE TABS ============
 function switchMedicineTab(tab) {
+    if (isReturnMode) {
+        return;
+    }
     $('.pharmacy-tab').removeClass('active');
     $('.tab-content-pharmacy').removeClass('active');
     if (tab === 'batch') {
@@ -592,6 +606,10 @@ $('#medicineSearch').on('input', debounce(function () {
 
 // ============ CART MANAGEMENT ============
 function addToCart() {
+    if (isReturnMode) {
+        showToast('Return mode: cannot add items', 'warning');
+        return;
+    }
     if (!currentBatchInfo) { showToast('Please select a batch first', 'warning'); return; }
 
     const qty = parseInt($('#addQty').val()) || 0;
@@ -667,6 +685,10 @@ function addToCart() {
 }
 
 function addFromAdvancedSearch(productId, batchNumber) {
+    if (isReturnMode) {
+        showToast('Return mode: cannot add items', 'warning');
+        return;
+    }
     const addKey = `${String(productId || '').trim().toLowerCase()}|${String(batchNumber || '').trim().toLowerCase()}`;
     const now = Date.now();
     const lastInFlightAt = inFlightBatchAdds.get(addKey);
@@ -764,13 +786,13 @@ function recalculateItem(index) {
     const taxPercent = parseFloat(item.taxPercent) || 0;
 
     const lineTotal = price * qty;
-    item.discountAmount = lineTotal * discPercent / 100;
+    item.discountAmount = round2(lineTotal * discPercent / 100);
     const afterDisc = Math.max(0, lineTotal - (parseFloat(item.discountAmount) || 0));
     item.taxPercent = taxPercent;
-    item.baseTotal = afterDisc;
-    const includedTax = taxPercent > 0 ? (afterDisc * (taxPercent / (100 + taxPercent))) : 0;
-    item.taxAmount = includedTax;
-    item.total = afterDisc;
+    item.baseTotal = round2(afterDisc);
+    const includedTax = taxPercent > 0 ? (item.baseTotal * (taxPercent / (100 + taxPercent))) : 0;
+    item.taxAmount = round2(includedTax);
+    item.total = item.baseTotal;
 }
 
 function computeTaxBreakupBySlab() {
@@ -784,18 +806,12 @@ function computeTaxBreakupBySlab() {
         const gst = parseFloat(item.taxPercent) || 0;
         if (!(gst === 5 || gst === 12 || gst === 18)) return;
 
-        // After-tax additional discount model:
-        // - item.total is tax-inclusive MRP (after item-discount only)
-        // - tax is extracted from item.total
-        const baseAfterDisc = parseFloat(item.baseTotal) || 0;
-        const includedTax = gst > 0 ? (baseAfterDisc * (gst / (100 + gst))) : 0;
-        const halfTax = includedTax / 2;
+        const lineTax = round2(parseFloat(item.taxAmount) || 0);
+        const cgstAmt = round2(lineTax / 2);
+        const sgstAmt = round2(lineTax - cgstAmt);
 
-        const cgstAmt = halfTax;
-        const sgstAmt = halfTax;
-
-        result[gst].cgst += cgstAmt;
-        result[gst].sgst += sgstAmt;
+        result[gst].cgst = round2(result[gst].cgst + cgstAmt);
+        result[gst].sgst = round2(result[gst].sgst + sgstAmt);
     });
 
     return result;
@@ -906,6 +922,8 @@ function renderSaleItems() {
         const displayName = item.productName || item.medicineName || '';
         const displayUnit = item.saleUomName || item.uomName || item.unitType || 'PCS';
         const isStockItem = !!item.productId;
+        const maxQty = getMaxQtyForItem(item);
+        const maxQtyAttr = (maxQty && maxQty > 0) ? `max="${maxQty}"` : '';
         const uomOpt = isStockItem ? getCachedUomOptions(item.productId) : null;
         let baseUnitName = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName) || 'PCS';
         let otherUnitName = normalizeUomName(uomOpt?.otherUomName);
@@ -967,21 +985,21 @@ function renderSaleItems() {
                     </select>`}
                 </td>
                 <td>
-                    <input type="number" class="item-qty-input" value="${item.quantity}" min="1" max="${getMaxQtyForItem(item)}"
+                    <input type="number" class="item-qty-input" value="${item.quantity}" min="1" ${maxQtyAttr}
                            oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
                 </td>
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
                 <td>
                     <input type="number" class="item-discount-input" value="${item.discountPercent}" min="0" max="100" step="0.5"
-                           oninput="updateItemDiscount(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
+                           ${isReturnMode ? 'disabled' : ''} oninput="updateItemDiscount(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
                 </td>
                 <td style="color: var(--accent-600); font-variant-numeric: tabular-nums;">${formatCurrency(item.discountAmount)}</td>
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.taxAmount || 0)}</td>
                 <td class="text-right" style="font-weight:700; font-variant-numeric: tabular-nums;">${formatCurrency(item.total)}</td>
                 <td>
-                    <button class="btn-remove" onclick="removeItem(${index})" title="Remove">
+                    ${isReturnMode ? '' : `<button class="btn-remove" onclick="removeItem(${index})" title="Remove">
                         <i class="bi bi-trash3"></i>
-                    </button>
+                    </button>`}
                 </td>
             </tr>
         `);
@@ -1052,6 +1070,11 @@ function updateItemQuantity(index, value) {
 }
 
 function updateItemDiscount(index, value) {
+    if (isReturnMode) {
+        showToast('Return mode: discount cannot be changed', 'warning');
+        $(`#disc-${index}`).val(saleItems[index].discountPercent);
+        return;
+    }
     const disc = parseFloat(value) || 0;
     if (disc < 0 || disc > 100) {
         showToast('Discount must be between 0 and 100%', 'error');
@@ -1068,6 +1091,10 @@ function updateItemDiscount(index, value) {
 }
 
 function removeItem(index) {
+    if (isReturnMode) {
+        showToast('Return mode: items cannot be removed', 'warning');
+        return;
+    }
     const name = saleItems[index].productName || saleItems[index].medicineName;
     saleItems.splice(index, 1);
     renderSaleItems();
@@ -1080,6 +1107,10 @@ function removeItem(index) {
 }
 
 function clearAllItems() {
+    if (isReturnMode) {
+        showToast('Return mode: items cannot be cleared', 'warning');
+        return;
+    }
     saleItems = [];
     renderSaleItems();
     recalculateBill();
@@ -1158,15 +1189,14 @@ function recalculateBill() {
     // After-tax additional discount model:
     // - additional discount is applied only at summary level (payable), not distributed to line items
     saleItems.forEach(item => {
-        const gst = parseFloat(item.taxPercent) || 0;
-        const baseAfterDisc = parseFloat(item.baseTotal) || 0;
-
-        const includedTax = gst > 0 ? (baseAfterDisc * (gst / (100 + gst))) : 0;
-        item.taxAmount = includedTax;
+        const baseAfterDisc = round2(parseFloat(item.baseTotal) || 0);
+        const lineTax = round2(parseFloat(item.taxAmount) || 0);
+        item.baseTotal = baseAfterDisc;
+        item.taxAmount = lineTax;
         item.total = baseAfterDisc;
 
-        taxTotal += includedTax;
-        grandTotalBeforeAddDisc += baseAfterDisc;
+        taxTotal = round2(taxTotal + lineTax);
+        grandTotalBeforeAddDisc = round2(grandTotalBeforeAddDisc + baseAfterDisc);
     });
 
     const basePayable = Math.max(0, grandTotalBeforeAddDisc - additionalDiscount);
@@ -1223,6 +1253,9 @@ function updatePaymentAmount(grandTotal) {
 
 // ============ PAYMENT ============
 function selectPaymentMethod(method, options) {
+    if (isReturnMode && !isPrefillingEditSale) {
+        return;
+    }
     const opts = options || {};
     selectedPaymentMethod = method;
     $('.payment-method-card').removeClass('selected');
@@ -1360,6 +1393,10 @@ function syncSplitPayments(changedField, normalizeChangedField) {
 
 // ============ ADVANCED SEARCH ============
 function advancedSearch() {
+    if (isReturnMode) {
+        showToast('Return mode: cannot search/add items', 'warning');
+        return;
+    }
     const batchNumber = $('#advBatchNumber').val().trim();
     const medicineName = $('#advMedicineName').val().trim();
     const composition = $('#advComposition').val().trim();
@@ -1403,6 +1440,13 @@ function completeSale() {
     const grandTotal = getGrandTotal();
     let payments = [];
 
+    if (isReturnMode && selectedPaymentMethod === 'Split') {
+        $('#splitCash').val(grandTotal.toFixed(2));
+        $('#splitCard').val((0).toFixed(2));
+        $('#splitUpi').val((0).toFixed(2));
+        $('#splitRemaining').text(formatCurrency(0));
+    }
+
     if (selectedPaymentMethod === 'Cash') {
         const cashReceived = parseFloat($('#cashAmount').val()) || 0;
         payments.push({ paymentMode: 'Cash', amount: grandTotal, reference: `Cash received: ${cashReceived}` });
@@ -1440,6 +1484,7 @@ function completeSale() {
 
     const request = {
         saleId: editingSaleId || null,
+        returnMode: isReturnMode === true,
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || fallbackName || inferredSearchName,
         customerPhone: selectedCustomer?.phone || fallbackPhone || inferredSearchPhone,
@@ -1499,6 +1544,7 @@ function startNewSale() {
     selectedUnitType = 'PCS';
     selectedPaymentMethod = 'Cash';
     editingSaleId = null;
+    isReturnMode = false;
     window.__lastCompletedSaleId = null;
 
     // Reset UI
@@ -1583,10 +1629,41 @@ $(document).ready(function () {
 
     const params = new URLSearchParams(window.location.search);
     const editSaleId = params.get('editSaleId');
+    const returnModeParam = params.get('returnMode');
+    isReturnMode = returnModeParam === '1' || String(returnModeParam || '').toLowerCase() === 'true';
     if (editSaleId) {
         loadSaleForEdit(editSaleId);
     }
 });
+
+function applyReturnModeLocks() {
+    if (!isReturnMode) return;
+
+    // Customer
+    $('#customerSearch').prop('disabled', true).hide();
+    $('#toggleNewCustomerForm').prop('disabled', true).hide();
+    $('#skipCustomerBtn').prop('disabled', true).hide();
+    $('#selectedCustomerCard .customer-remove').hide();
+
+    // Additional discount
+    $('#additionalDiscountPercent').prop('disabled', true);
+    $('#additionalDiscount').prop('disabled', true);
+
+    // Prevent changing payment method + amounts
+    $('.payment-method-card').css('pointer-events', 'none');
+    $('#cashAmount, #cardAmount, #upiAmount, #splitCash, #splitCard, #splitUpi').prop('readonly', true);
+    $('#cardRefNo, #upiRefNo, #splitCardRefNo, #splitUpiRefNo').prop('readonly', true);
+
+    // Prevent add/remove/clear
+    $('#clearCartBtn').hide();
+
+    // Prevent adding medicines
+    $('#medicineSearch, #batchSearch, #advBatchNumber, #advMedicineName, #advComposition, #advExpiryFrom, #advExpiryTo').prop('disabled', true);
+    $('#medicineDropdown, #batchDropdown').removeClass('show').empty();
+    $('#medicineBatchesCard, #batchInfoCard').removeClass('show').empty();
+    $('#advancedSearchResults').empty();
+    $('#tabDirect, #tabBatch, #tabAdvanced').prop('disabled', true).css('pointer-events', 'none');
+}
 
 function loadSaleForEdit(saleId) {
     fetch(`${MVC_BASE}/GetSaleForEdit?id=${encodeURIComponent(saleId)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -1741,6 +1818,8 @@ function loadSaleForEdit(saleId) {
             recalculateBill();
             updateCompleteSaleBtn();
             switchMedicineTab('direct');
+
+            applyReturnModeLocks();
 
             isPrefillingEditSale = false;
         })

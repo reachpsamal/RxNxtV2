@@ -55,6 +55,7 @@ public sealed class StockSearchResult
 public class CompleteSaleRequest
 {
     public int? SaleId { get; set; }
+    public bool ReturnMode { get; set; }
     public int? CustomerId { get; set; }
     public string? CustomerName { get; set; }
     public string? CustomerPhone { get; set; }
