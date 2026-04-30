@@ -13,6 +13,20 @@ public sealed class InvoicePdfDocument : IDocument
 {
     private readonly Sale _sale;
 
+    private sealed record InvoiceTotals(
+        string PaymentMode,
+        string PaymentsText,
+        string AmountInWords,
+        decimal TaxableAmt,
+        decimal TaxAmt,
+        decimal ItemDiscountAmt,
+        decimal AdditionalDiscountAmt,
+        decimal RoundedGrandTotal,
+        decimal RoundOffAmt,
+        Dictionary<decimal, decimal> TaxTotalByRate,
+        Dictionary<decimal, decimal> CgstByRate,
+        Dictionary<decimal, decimal> SgstByRate);
+
     public InvoicePdfDocument(Sale sale)
     {
         _sale = sale;
@@ -22,51 +36,104 @@ public sealed class InvoicePdfDocument : IDocument
 
     public void Compose(IDocumentContainer container)
     {
-        container.Page(page =>
-        {
-            page.Size(PageSizes.A4);
-            page.Margin(18);
-            page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(8));
-            page.Content().Column(col => ComposeCopy(col, "Customer Copy"));
-        });
+        const int itemsPerPage = 15;
 
-        container.Page(page =>
-        {
-            page.Size(PageSizes.A4);
-            page.Margin(18);
-            page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(8));
-            page.Content().Column(col => ComposeCopy(col, "Office Copy"));
-        });
-    }
-
-    private void ComposeCopy(ColumnDescriptor col, string copyLabel)
-    {
-        var items = (_sale.SaleItems ?? new List<SaleItem>()).ToList();
+        var allItems = (_sale.SaleItems ?? new List<SaleItem>()).ToList();
         var payments = (_sale.Payments ?? new List<Payment>()).ToList();
-        var paymentMode = GetPaymentMode(payments);
 
+        static decimal Round2(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
         static decimal IncludedTax(decimal taxInclusiveTotal, decimal rate) => rate > 0 ? (taxInclusiveTotal * (rate / (100m + rate))) : 0m;
         static decimal LineTotal(SaleItem it) => Math.Max(0m, (it.Price * it.Quantity) - it.DiscountAmount);
+        static decimal IncludedTaxRounded(decimal taxInclusiveTotal, decimal rate) => Round2(IncludedTax(taxInclusiveTotal, rate));
 
-        var lineTotalSum = items.Sum(LineTotal);
-        var taxAmt = items.Sum(i => IncludedTax(LineTotal(i), i.TaxPercent));
+        var lineTotalSum = allItems.Sum(LineTotal);
+        var taxAmt = allItems.Sum(i => IncludedTaxRounded(LineTotal(i), i.TaxPercent));
         var taxableAmt = lineTotalSum - taxAmt;
-        var itemDiscountAmt = items.Sum(i => i.DiscountAmount);
+        var itemDiscountAmt = allItems.Sum(i => i.DiscountAmount);
         var additionalDiscountAmt = _sale.AdditionalDiscount;
         var netGrandTotal = Math.Max(0m, lineTotalSum - additionalDiscountAmt);
         var roundedGrandTotal = Math.Round(netGrandTotal, 0, MidpointRounding.AwayFromZero);
         var roundOffAmt = roundedGrandTotal - netGrandTotal;
 
-        var fixedRates = new[] { 5m, 12m, 18m };
-        var taxTotalByRate = items
+        var taxTotalByRate = allItems
             .GroupBy(i => i.TaxPercent)
-            .ToDictionary(g => g.Key, g => g.Sum(x => IncludedTax(LineTotal(x), x.TaxPercent)));
+            .ToDictionary(g => g.Key, g => g.Sum(x => IncludedTaxRounded(LineTotal(x), x.TaxPercent)));
+
+        var cgstByRate = new Dictionary<decimal, decimal>();
+        var sgstByRate = new Dictionary<decimal, decimal>();
+        foreach (var kv in taxTotalByRate)
+        {
+            var rate = kv.Key;
+            if (rate <= 0) continue;
+            var slabTax = kv.Value;
+            var half = Round2(slabTax / 2m);
+            var otherHalf = Round2(slabTax - half);
+            cgstByRate[rate] = half;
+            sgstByRate[rate] = otherHalf;
+        }
 
         string FormatMoney(decimal value) => string.Format(CultureInfo.InvariantCulture, "₹ {0:0.00}", value);
-
         var paymentsText = BuildPaymentsText(payments, FormatMoney);
         var words = NumberToWords((long)roundedGrandTotal);
         var amountInWords = $"{words} Rupees Only";
+
+        var totals = new InvoiceTotals(
+            GetPaymentMode(payments),
+            paymentsText,
+            amountInWords,
+            taxableAmt,
+            taxAmt,
+            itemDiscountAmt,
+            additionalDiscountAmt,
+            roundedGrandTotal,
+            roundOffAmt,
+            taxTotalByRate,
+            cgstByRate,
+            sgstByRate);
+
+        var pages = Chunk(allItems, itemsPerPage);
+        if (pages.Count == 0)
+            pages.Add(new List<SaleItem>());
+
+        for (var pageIndex = 0; pageIndex < pages.Count; pageIndex++)
+        {
+            var pageItems = pages[pageIndex];
+            var showTotals = pageIndex == (pages.Count - 1);
+
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(18);
+                page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(8));
+                page.Content().Column(col =>
+                {
+                    ComposeCopy(col, "Customer Copy", pageItems, totals, showTotals);
+                    col.Item().PaddingVertical(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+                    ComposeCopy(col, "Office Copy", pageItems, totals, showTotals);
+                });
+            });
+        }
+    }
+
+    private static List<List<T>> Chunk<T>(List<T> source, int size)
+    {
+        var pages = new List<List<T>>();
+        if (size <= 0) return pages;
+        for (var i = 0; i < source.Count; i += size)
+            pages.Add(source.Skip(i).Take(size).ToList());
+        return pages;
+    }
+
+    private void ComposeCopy(ColumnDescriptor col, string copyLabel, List<SaleItem> pageItems, InvoiceTotals totals, bool showTotals)
+    {
+        static decimal Round2(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        static decimal IncludedTax(decimal taxInclusiveTotal, decimal rate) => rate > 0 ? (taxInclusiveTotal * (rate / (100m + rate))) : 0m;
+        static decimal LineTotal(SaleItem it) => Math.Max(0m, (it.Price * it.Quantity) - it.DiscountAmount);
+        static decimal IncludedTaxRounded(decimal taxInclusiveTotal, decimal rate) => Round2(IncludedTax(taxInclusiveTotal, rate));
+
+        var fixedRates = new[] { 5m, 12m, 18m };
+
+        string FormatMoney(decimal value) => string.Format(CultureInfo.InvariantCulture, "₹ {0:0.00}", value);
 
         col.Item().Row(r =>
         {
@@ -100,7 +167,7 @@ public sealed class InvoicePdfDocument : IDocument
                 right.Item().Text(text =>
                 {
                     text.Span("Payment Mode:").SemiBold();
-                    text.Span($" {paymentMode}");
+                    text.Span($" {totals.PaymentMode}");
                 });
                 right.Item().Text(text =>
                 {
@@ -140,9 +207,9 @@ public sealed class InvoicePdfDocument : IDocument
                 header.Cell().Element(CellStyleHeader).AlignRight().Text("Total");
             });
 
-            for (var i = 0; i < items.Count; i++)
+            for (var i = 0; i < pageItems.Count; i++)
             {
-                var it = items[i];
+                var it = pageItems[i];
                 table.Cell().Element(CellStyleBody).Text(it.ProductName);
                 table.Cell().Element(CellStyleBody).Text(it.BatchNumber);
                 table.Cell().Element(CellStyleBody).Text(it.ExpiryDate.ToString("MM-yy"));
@@ -150,7 +217,7 @@ public sealed class InvoicePdfDocument : IDocument
                 table.Cell().Element(CellStyleBody).AlignRight().Text(it.Quantity.ToString(CultureInfo.InvariantCulture));
                 table.Cell().Element(CellStyleBody).AlignRight().Text(it.Price.ToString("0.00", CultureInfo.InvariantCulture));
                 table.Cell().Element(CellStyleBody).AlignRight().Text(it.DiscountAmount.ToString("0.00", CultureInfo.InvariantCulture));
-                table.Cell().Element(CellStyleBody).AlignRight().Text(IncludedTax(LineTotal(it), it.TaxPercent).ToString("0.00", CultureInfo.InvariantCulture));
+                table.Cell().Element(CellStyleBody).AlignRight().Text(IncludedTaxRounded(LineTotal(it), it.TaxPercent).ToString("0.00", CultureInfo.InvariantCulture));
                 table.Cell().Element(CellStyleBody).AlignRight().Text(LineTotal(it).ToString("0.00", CultureInfo.InvariantCulture)).SemiBold();
             }
 
@@ -169,94 +236,97 @@ public sealed class InvoicePdfDocument : IDocument
                 .PaddingHorizontal(2);
         });
 
-        col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
-
-        col.Item().PaddingTop(8).Row(r =>
+        if (showTotals)
         {
-            r.Spacing(12);
-            r.RelativeItem().Table(t =>
+            col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
+
+            col.Item().PaddingTop(8).Row(r =>
             {
-                t.ColumnsDefinition(cols =>
+                r.Spacing(12);
+                r.RelativeItem().Table(t =>
                 {
-                    cols.ConstantColumn(55);
-                    cols.RelativeColumn();
-                    cols.RelativeColumn();
-                    cols.RelativeColumn();
+                    t.ColumnsDefinition(cols =>
+                    {
+                        cols.ConstantColumn(55);
+                        cols.RelativeColumn();
+                        cols.RelativeColumn();
+                        cols.RelativeColumn();
+                    });
+
+                    t.Header(h =>
+                    {
+                        h.Cell().Element(TaxHdr).Text("GST");
+                        h.Cell().Element(TaxHdr).AlignRight().Text("5%");
+                        h.Cell().Element(TaxHdr).AlignRight().Text("12%");
+                        h.Cell().Element(TaxHdr).AlignRight().Text("18%");
+                    });
+
+                    t.Cell().Element(TaxCellLbl).Text("CGST");
+                    foreach (var rate in fixedRates)
+                    {
+                        var total = totals.CgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                        t.Cell().Element(TaxCellNum).AlignRight().Text(FormatMoney(total));
+                    }
+
+                    t.Cell().Element(TaxCellLbl).Text("SGST");
+                    foreach (var rate in fixedRates)
+                    {
+                        var total = totals.SgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                        t.Cell().Element(TaxCellNum).AlignRight().Text(FormatMoney(total));
+                    }
+
+                    static IContainer TaxHdr(IContainer c) => c
+                        .DefaultTextStyle(x => x.SemiBold())
+                        .Border(1)
+                        .BorderColor(Colors.Grey.Lighten2)
+                        .Padding(2);
+
+                    static IContainer TaxCellLbl(IContainer c) => c
+                        .Border(1)
+                        .BorderColor(Colors.Grey.Lighten2)
+                        .Padding(2);
+
+                    static IContainer TaxCellNum(IContainer c) => c
+                        .Border(1)
+                        .BorderColor(Colors.Grey.Lighten2)
+                        .Padding(2);
                 });
 
-                t.Header(h =>
+                r.ConstantItem(260).PaddingLeft(6).Column(totalsCol =>
                 {
-                    h.Cell().Element(TaxHdr).Text("GST");
-                    h.Cell().Element(TaxHdr).AlignRight().Text("5%");
-                    h.Cell().Element(TaxHdr).AlignRight().Text("12%");
-                    h.Cell().Element(TaxHdr).AlignRight().Text("18%");
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Taxable Amt"); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.TaxableAmt)); });
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Tax Amt"); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.TaxAmt)); });
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Item Discount"); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.ItemDiscountAmt)); });
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Additional Discount"); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.AdditionalDiscountAmt)); });
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Round-off"); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.RoundOffAmt)); });
+                    totalsCol.Item().Row(x => { x.RelativeItem().Text("Grand Total").SemiBold(); x.ConstantItem(90).AlignRight().Text(FormatMoney(totals.RoundedGrandTotal)).SemiBold(); });
+                });
+            });
+
+            col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
+
+            col.Item().PaddingTop(6).Column(p =>
+            {
+                p.Item().PaddingBottom(4).Text(text =>
+                {
+                    text.DefaultTextStyle(x => x.FontSize(8));
+                    text.Span("Payment Details:-").SemiBold().Underline();
                 });
 
-                t.Cell().Element(TaxCellLbl).Text("CGST");
-                foreach (var rate in fixedRates)
+                p.Item().Text(text =>
                 {
-                    var total = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                    t.Cell().Element(TaxCellNum).AlignRight().Text(FormatMoney(total / 2));
-                }
+                    text.DefaultTextStyle(x => x.FontSize(8));
+                    text.Span(string.IsNullOrWhiteSpace(totals.PaymentsText) ? "-" : totals.PaymentsText);
+                });
 
-                t.Cell().Element(TaxCellLbl).Text("SGST");
-                foreach (var rate in fixedRates)
+                p.Item().Text(text =>
                 {
-                    var total = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                    t.Cell().Element(TaxCellNum).AlignRight().Text(FormatMoney(total / 2));
-                }
-
-                static IContainer TaxHdr(IContainer c) => c
-                    .DefaultTextStyle(x => x.SemiBold())
-                    .Border(1)
-                    .BorderColor(Colors.Grey.Lighten2)
-                    .Padding(2);
-
-                static IContainer TaxCellLbl(IContainer c) => c
-                    .Border(1)
-                    .BorderColor(Colors.Grey.Lighten2)
-                    .Padding(2);
-
-                static IContainer TaxCellNum(IContainer c) => c
-                    .Border(1)
-                    .BorderColor(Colors.Grey.Lighten2)
-                    .Padding(2);
+                    text.DefaultTextStyle(x => x.FontSize(8));
+                    text.Span("Amount in Words: ").SemiBold();
+                    text.Span(totals.AmountInWords).Italic();
+                });
             });
-
-            r.ConstantItem(260).PaddingLeft(6).Column(totals =>
-            {
-                totals.Item().Row(x => { x.RelativeItem().Text("Taxable Amt"); x.ConstantItem(90).AlignRight().Text(FormatMoney(taxableAmt)); });
-                totals.Item().Row(x => { x.RelativeItem().Text("Tax Amt"); x.ConstantItem(90).AlignRight().Text(FormatMoney(taxAmt)); });
-                totals.Item().Row(x => { x.RelativeItem().Text("Item Discount"); x.ConstantItem(90).AlignRight().Text(FormatMoney(itemDiscountAmt)); });
-                totals.Item().Row(x => { x.RelativeItem().Text("Additional Discount"); x.ConstantItem(90).AlignRight().Text(FormatMoney(additionalDiscountAmt)); });
-                totals.Item().Row(x => { x.RelativeItem().Text("Round-off"); x.ConstantItem(90).AlignRight().Text(FormatMoney(roundOffAmt)); });
-                totals.Item().Row(x => { x.RelativeItem().Text("Grand Total").SemiBold(); x.ConstantItem(90).AlignRight().Text(FormatMoney(roundedGrandTotal)).SemiBold(); });
-            });
-        });
-
-        col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Black);
-
-        col.Item().PaddingTop(6).Column(p =>
-        {
-            p.Item().PaddingBottom(4).Text(text =>
-            {
-                text.DefaultTextStyle(x => x.FontSize(8));
-                text.Span("Payment Details:-").SemiBold().Underline();
-            });
-
-            p.Item().Text(text =>
-            {
-                text.DefaultTextStyle(x => x.FontSize(8));
-                text.Span(string.IsNullOrWhiteSpace(paymentsText) ? "-" : paymentsText);
-            });
-
-            p.Item().Text(text =>
-            {
-                text.DefaultTextStyle(x => x.FontSize(8));
-                text.Span("Amount in Words: ").SemiBold();
-                text.Span(amountInWords).Italic();
-            });
-        });
+        }
     }
 
     private static string GetPaymentMode(List<Payment> payments)
@@ -285,7 +355,8 @@ public sealed class InvoicePdfDocument : IDocument
         {
             if (!groups.TryGetValue(mode, out var g) || g.Amount == 0) continue;
             var s = $"{mode} {formatMoney(g.Amount)}";
-            if (!string.IsNullOrWhiteSpace(g.Reference) && mode.Equals("UPI", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(g.Reference) &&
+                (mode.Equals("UPI", StringComparison.OrdinalIgnoreCase) || mode.Equals("Card", StringComparison.OrdinalIgnoreCase)))
             {
                 s += $" ({g.Reference})";
             }

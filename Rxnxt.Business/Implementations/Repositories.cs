@@ -1136,13 +1136,59 @@ namespace Rxnxt.Business.Implementations
                                 !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
                                 string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 
-                            if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
+                            var isPcsStripPair =
+                                (Matches(baseName, "PCS") && Matches(otherName, "STRIP")) ||
+                                (Matches(baseName, "STRIP") && Matches(otherName, "PCS"));
+
+                            if (isPcsStripPair)
                             {
-                                requiredBaseQty = item.Quantity;
-                            }
-                            else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
-                            {
-                                if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
+                                if (Matches(baseName, "PCS"))
+                                {
+                                    if (Matches(selectedUomName, "PCS"))
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                    else if (Matches(selectedUomName, "STRIP"))
+                                    {
+                                        requiredBaseQty = item.Quantity * factor;
+                                    }
+                                    else
+                                    {
+                                        return new SaleResult
+                                        {
+                                            Success = false,
+                                            Message = $"Invalid unit '{selectedUomName}' for {item.ProductName}."
+                                        };
+                                    }
+                                }
+                                else if (Matches(baseName, "STRIP"))
+                                {
+                                    if (Matches(selectedUomName, "STRIP"))
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                    else if (Matches(selectedUomName, "PCS"))
+                                    {
+                                        if (factor <= 0)
+                                        {
+                                            return new SaleResult
+                                            {
+                                                Success = false,
+                                                Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix conversion factor."
+                                            };
+                                        }
+                                        requiredBaseQty = item.Quantity / factor;
+                                    }
+                                    else
+                                    {
+                                        return new SaleResult
+                                        {
+                                            Success = false,
+                                            Message = $"Invalid unit '{selectedUomName}' for {item.ProductName}."
+                                        };
+                                    }
+                                }
+                                else
                                 {
                                     return new SaleResult
                                     {
@@ -1150,19 +1196,38 @@ namespace Rxnxt.Business.Implementations
                                         Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
                                     };
                                 }
-
-                                var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
-                                var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
-                                var mappingReversed = baseIsPcs && !otherIsPcs;
-                                requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
                             }
                             else
                             {
-                                return new SaleResult
+
+                                if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
                                 {
-                                    Success = false,
-                                    Message = $"Invalid unit '{selectedUomName}' for {item.ProductName}."
-                                };
+                                    requiredBaseQty = item.Quantity;
+                                }
+                                else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
+                                {
+                                    if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
+                                    {
+                                        return new SaleResult
+                                        {
+                                            Success = false,
+                                            Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
+                                        };
+                                    }
+
+                                    var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                    var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                    var mappingReversed = baseIsPcs && !otherIsPcs;
+                                    requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
+                                }
+                                else
+                                {
+                                    return new SaleResult
+                                    {
+                                        Success = false,
+                                        Message = $"Invalid unit '{selectedUomName}' for {item.ProductName}."
+                                    };
+                                }
                             }
                         }
 
@@ -1236,29 +1301,74 @@ namespace Rxnxt.Business.Implementations
                                 !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
                                 string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 
-                            if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
-                            {
-                                requiredBaseQty = item.Quantity;
-                            }
-                            else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
-                            {
-                                if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
-                                {
-                                    return new SaleResult
-                                    {
-                                        Success = false,
-                                        Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
-                                    };
-                                }
+                            var isPcsStripPair =
+                                (Matches(baseName, "PCS") && Matches(otherName, "STRIP")) ||
+                                (Matches(baseName, "STRIP") && Matches(otherName, "PCS"));
 
-                                var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
-                                var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
-                                var mappingReversed = baseIsPcs && !otherIsPcs;
-                                requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
+                            if (isPcsStripPair)
+                            {
+                                if (Matches(baseName, "PCS"))
+                                {
+                                    if (Matches(selectedUomName, "PCS"))
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                    else if (Matches(selectedUomName, "STRIP"))
+                                    {
+                                        requiredBaseQty = item.Quantity * factor;
+                                    }
+                                    else
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                }
+                                else if (Matches(baseName, "STRIP"))
+                                {
+                                    if (Matches(selectedUomName, "STRIP"))
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                    else if (Matches(selectedUomName, "PCS"))
+                                    {
+                                        requiredBaseQty = (factor > 0) ? (item.Quantity / factor) : item.Quantity;
+                                    }
+                                    else
+                                    {
+                                        requiredBaseQty = item.Quantity;
+                                    }
+                                }
+                                else
+                                {
+                                    requiredBaseQty = item.Quantity;
+                                }
                             }
                             else
                             {
-                                requiredBaseQty = item.Quantity;
+
+                                if (Matches(selectedUomName, baseName) || Matches(selectedUomName, item.UomName))
+                                {
+                                    requiredBaseQty = item.Quantity;
+                                }
+                                else if (!string.IsNullOrWhiteSpace(otherName) && Matches(selectedUomName, otherName))
+                                {
+                                    if (factor != 1m && !string.IsNullOrWhiteSpace(baseUomId) && Matches(baseUomId, otherUomId))
+                                    {
+                                        return new SaleResult
+                                        {
+                                            Success = false,
+                                            Message = $"Conversion not possible for {item.ProductName}. Please contact admin to fix UOM mapping."
+                                        };
+                                    }
+
+                                    var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                    var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                    var mappingReversed = baseIsPcs && !otherIsPcs;
+                                    requiredBaseQty = mappingReversed ? (item.Quantity * factor) : (item.Quantity / factor);
+                                }
+                                else
+                                {
+                                    requiredBaseQty = item.Quantity;
+                                }
                             }
                         }
 

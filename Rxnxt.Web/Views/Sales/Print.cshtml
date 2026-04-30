@@ -74,14 +74,16 @@
             .ToList();
         var paymentModeText = paymentModes.Count == 0 ? "-" : string.Join("+", paymentModes);
 
+        static decimal Round2(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
         static decimal IncludedTax(decimal taxInclusiveTotal, decimal rate) => rate > 0 ? (taxInclusiveTotal * (rate / (100m + rate))) : 0m;
+        static decimal IncludedTaxRounded(decimal taxInclusiveTotal, decimal rate) => Round2(IncludedTax(taxInclusiveTotal, rate));
 
         var saleItemsForCalc = (Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>()).ToList();
         var itemDiscountAmt = saleItemsForCalc.Sum(i => i.DiscountAmount);
         var additionalDiscountAmt = Model?.AdditionalDiscount ?? 0m;
 
         var lineTotalSum = saleItemsForCalc.Sum(i => Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount));
-        var taxAmt = saleItemsForCalc.Sum(i => IncludedTax(Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount), i.TaxPercent));
+        var taxAmt = saleItemsForCalc.Sum(i => IncludedTaxRounded(Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount), i.TaxPercent));
         var taxableAmt = lineTotalSum - taxAmt;
 
         var netGrandTotal = Math.Max(0m, lineTotalSum - additionalDiscountAmt);
@@ -152,7 +154,7 @@
             .Select(g => new
             {
                 Rate = g.Key,
-                TaxTotal = g.Sum(x => IncludedTax(Math.Max(0m, (x.Price * x.Quantity) - x.DiscountAmount), x.TaxPercent))
+                TaxTotal = g.Sum(x => IncludedTaxRounded(Math.Max(0m, (x.Price * x.Quantity) - x.DiscountAmount), x.TaxPercent))
             })
             .Where(x => x.Rate > 0)
             .OrderBy(x => x.Rate)
@@ -160,6 +162,19 @@
 
         var fixedRates = new[] { 5m, 12m, 18m };
         var taxTotalByRate = taxByRate.ToDictionary(x => x.Rate, x => x.TaxTotal);
+
+        var cgstByRate = new Dictionary<decimal, decimal>();
+        var sgstByRate = new Dictionary<decimal, decimal>();
+        foreach (var kv in taxTotalByRate)
+        {
+            var rate = kv.Key;
+            if (rate <= 0) continue;
+            var slabTax = kv.Value;
+            var half = Round2(slabTax / 2m);
+            var otherHalf = Round2(slabTax - half);
+            cgstByRate[rate] = half;
+            sgstByRate[rate] = otherHalf;
+        }
 
         var paymentsOrdered = (Model?.Payments ?? Enumerable.Empty<Rxnxt.Domain.Models.Payment>())
             .Where(p => p != null && p.Amount != 0m)
@@ -242,7 +257,7 @@
                     @foreach (var i in Model?.SaleItems ?? Enumerable.Empty<Rxnxt.Domain.Models.SaleItem>())
                     {
                         var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
-                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
+                        var lineTax = IncludedTaxRounded(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -281,16 +296,16 @@
                                 <td class="lbl"><strong>CGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var cgstTotal = cgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(cgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                             <tr>
                                 <td class="lbl"><strong>SGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var sgstTotal = sgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(sgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                         </tbody>
@@ -357,7 +372,7 @@
                     @foreach (var i in Model.SaleItems)
                     {
                         var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
-                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
+                        var lineTax = IncludedTaxRounded(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -396,16 +411,16 @@
                                 <td class="lbl"><strong>CGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var cgstTotal = cgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(cgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                             <tr>
                                 <td class="lbl"><strong>SGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var sgstTotal = sgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(sgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                         </tbody>
@@ -473,7 +488,7 @@
                     @foreach (var i in Model.SaleItems)
                     {
                         var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
-                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
+                        var lineTax = IncludedTaxRounded(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -512,16 +527,16 @@
                                 <td class="lbl"><strong>CGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var cgstTotal = cgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(cgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                             <tr>
                                 <td class="lbl"><strong>SGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var sgstTotal = sgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(sgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                         </tbody>
@@ -588,7 +603,7 @@
                     @foreach (var i in Model.SaleItems)
                     {
                         var lineTotal = Math.Max(0m, (i.Price * i.Quantity) - i.DiscountAmount);
-                        var lineTax = IncludedTax(lineTotal, i.TaxPercent);
+                        var lineTax = IncludedTaxRounded(lineTotal, i.TaxPercent);
                         <tr>
                             <td>
                                 <div><strong>@i.ProductName</strong></div>
@@ -627,16 +642,16 @@
                                 <td class="lbl"><strong>CGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var cgstTotal = cgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(cgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                             <tr>
                                 <td class="lbl"><strong>SGST</strong></td>
                                 @foreach (var rate in fixedRates)
                                 {
-                                    var taxTotal = taxTotalByRate.TryGetValue(rate, out var v) ? v : 0m;
-                                    <td class="num">₹ @((taxTotal / 2m).ToString("0.00"))</td>
+                                    var sgstTotal = sgstByRate.TryGetValue(rate, out var v) ? v : 0m;
+                                    <td class="num">₹ @(sgstTotal.ToString("0.00"))</td>
                                 }
                             </tr>
                         </tbody>

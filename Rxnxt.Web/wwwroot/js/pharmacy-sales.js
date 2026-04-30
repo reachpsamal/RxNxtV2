@@ -305,6 +305,7 @@ function selectCustomer(id) {
             }
             $('#customerDropdown').removeClass('show').empty();
             $('#customerSearch').val('').hide();
+            $('#customerSearchIcon').hide();
             $('#toggleNewCustomerForm').hide();
             $('#skipCustomerBtn').hide();
             showToast(`Customer "${selectedCustomer?.name || ''}" selected`, 'success');
@@ -323,6 +324,7 @@ function removeCustomer() {
     selectedCustomer = null;
     $('#selectedCustomerCard').hide().empty();
     $('#customerSearch').val('').show();
+    $('#customerSearchIcon').show();
     $('#toggleNewCustomerForm').show();
     $('#skipCustomerBtn').show();
     updateCompleteSaleBtn();
@@ -351,6 +353,7 @@ function skipCustomer() {
         </div>
     `).show();
     $('#customerSearch').hide();
+    $('#customerSearchIcon').hide();
     $('#toggleNewCustomerForm').hide();
     $('#skipCustomerBtn').hide();
     updateCompleteSaleBtn();
@@ -802,16 +805,20 @@ function computeTaxBreakupBySlab() {
         18: { cgst: 0, sgst: 0 }
     };
 
+    const slabTax = { 5: 0, 12: 0, 18: 0 };
+
     saleItems.forEach(item => {
-        const gst = parseFloat(item.taxPercent) || 0;
+        const gst = parseFloat(item.taxPercent);
         if (!(gst === 5 || gst === 12 || gst === 18)) return;
-
         const lineTax = round2(parseFloat(item.taxAmount) || 0);
-        const cgstAmt = round2(lineTax / 2);
-        const sgstAmt = round2(lineTax - cgstAmt);
+        slabTax[gst] = round2(slabTax[gst] + lineTax);
+    });
 
-        result[gst].cgst = round2(result[gst].cgst + cgstAmt);
-        result[gst].sgst = round2(result[gst].sgst + sgstAmt);
+    [5, 12, 18].forEach(rate => {
+        const half = round2(slabTax[rate] / 2);
+        const otherHalf = round2(slabTax[rate] - half);
+        result[rate].cgst = half;
+        result[rate].sgst = otherHalf;
     });
 
     return result;
@@ -991,11 +998,11 @@ function renderSaleItems() {
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
                 <td>
                     <input type="number" class="item-discount-input" value="${item.discountPercent}" min="0" max="100" step="0.5"
-                           ${isReturnMode ? 'disabled' : ''} oninput="updateItemDiscount(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
+                           ${isReturnMode ? 'disabled' : ''} oninput="updateItemDiscountLive(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
                 </td>
-                <td style="color: var(--accent-600); font-variant-numeric: tabular-nums;">${formatCurrency(item.discountAmount)}</td>
-                <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.taxAmount || 0)}</td>
-                <td class="text-right" style="font-weight:700; font-variant-numeric: tabular-nums;">${formatCurrency(item.total)}</td>
+                <td id="discAmt-${index}" style="color: var(--accent-600); font-variant-numeric: tabular-nums;">${formatCurrency(item.discountAmount)}</td>
+                <td id="taxAmt-${index}" style="font-variant-numeric: tabular-nums;">${formatCurrency(item.taxAmount || 0)}</td>
+                <td id="lineTotal-${index}" class="text-right" style="font-weight:700; font-variant-numeric: tabular-nums;">${formatCurrency(item.total)}</td>
                 <td>
                     ${isReturnMode ? '' : `<button class="btn-remove" onclick="removeItem(${index})" title="Remove">
                         <i class="bi bi-trash3"></i>
@@ -1075,15 +1082,41 @@ function updateItemDiscount(index, value) {
         $(`#disc-${index}`).val(saleItems[index].discountPercent);
         return;
     }
-    const disc = parseFloat(value) || 0;
-    if (disc < 0 || disc > 100) {
+    const disc = parseFloat(value);
+    if (!Number.isFinite(disc) || disc < 0 || disc > 100) {
         showToast('Discount must be between 0 and 100%', 'error');
         $(`#disc-${index}`).val(saleItems[index].discountPercent);
         return;
     }
-    saleItems[index].discountPercent = disc;
+    $(`#disc-${index}`).val(disc);
+    updateItemDiscountLive(index, disc);
+}
+
+function updateItemDiscountLive(index, value) {
+    if (isReturnMode) {
+        return;
+    }
+
+    if (value === '' || value === null || value === undefined) {
+        saleItems[index].discountPercent = 0;
+    } else {
+        const disc = parseFloat(value);
+        if (!Number.isFinite(disc)) {
+            return;
+        }
+        if (disc < 0 || disc > 100) {
+            return;
+        }
+        saleItems[index].discountPercent = disc;
+    }
+
     recalculateItem(index);
-    renderSaleItems();
+
+    const item = saleItems[index];
+    $(`#discAmt-${index}`).text(formatCurrency(item.discountAmount));
+    $(`#taxAmt-${index}`).text(formatCurrency(item.taxAmount || 0));
+    $(`#lineTotal-${index}`).text(formatCurrency(item.total));
+
     recalculateBill();
 
     syncAdditionalDiscountAmountFromPercent();
@@ -1550,6 +1583,7 @@ function startNewSale() {
     // Reset UI
     $('#selectedCustomerCard').hide().empty();
     $('#customerSearch').val('').show();
+    $('#customerSearchIcon').show();
     $('#toggleNewCustomerForm').show();
     $('#skipCustomerBtn').show();
     $('#newCustomerForm').removeClass('show');
@@ -1702,11 +1736,13 @@ function loadSaleForEdit(saleId) {
                     </div>
                 `).show();
                 $('#customerSearch').hide();
+                $('#customerSearchIcon').hide();
                 $('#toggleNewCustomerForm').hide();
                 $('#skipCustomerBtn').hide();
             } else {
                 $('#selectedCustomerCard').hide().empty();
                 $('#customerSearch').show();
+                $('#customerSearchIcon').show();
                 $('#toggleNewCustomerForm').show();
                 $('#skipCustomerBtn').show();
             }
