@@ -11,10 +11,95 @@ let editingSaleId = null;
 let isPrefillingEditSale = false;
 let isReturnMode = false;
 
+let originalSaleItemsByKey = null;
+let originalSaleAdditionalDiscount = 0;
+
 const productUomOptionsCache = new Map();
 
 function normalizeUomName(name) {
     return (name || '').toString().trim();
+}
+
+function makeSaleItemKeyFromFields(productId, batchNumber, expiryDate) {
+    const pid = String(productId || '').trim().toLowerCase();
+    const bn = String(batchNumber || '').trim().toLowerCase();
+    const exp = expiryDate ? new Date(expiryDate) : null;
+    const expKey = exp && !Number.isNaN(exp.getTime()) ? exp.toISOString().slice(0, 10) : '';
+    return `${pid}|${bn}|${expKey}`;
+}
+
+function toBaseQty(qty, saleUnit, baseUnit, otherUnit, factor) {
+    const q = parseFloat(qty);
+    if (!Number.isFinite(q)) return 0;
+    const su = normalizeUomName(saleUnit);
+    const bu = normalizeUomName(baseUnit);
+    const ou = normalizeUomName(otherUnit);
+    const f = parseFloat(factor) || 1;
+    if (!su || !bu) return q;
+    if (su.toLowerCase() === bu.toLowerCase()) return q;
+    if (ou && su.toLowerCase() === ou.toLowerCase() && f > 0) {
+        const baseIsPcs = bu.toLowerCase() === 'pcs';
+        const otherIsPcs = ou.toLowerCase() === 'pcs';
+        const mappingReversed = baseIsPcs && !otherIsPcs;
+        return mappingReversed ? (q * f) : (q / f);
+    }
+    return q;
+}
+
+function fromBaseQty(baseQty, saleUnit, baseUnit, otherUnit, factor) {
+    const q = parseFloat(baseQty);
+    if (!Number.isFinite(q)) return 0;
+    const su = normalizeUomName(saleUnit);
+    const bu = normalizeUomName(baseUnit);
+    const ou = normalizeUomName(otherUnit);
+    const f = parseFloat(factor) || 1;
+    if (!su || !bu) return q;
+    if (su.toLowerCase() === bu.toLowerCase()) return q;
+    if (ou && su.toLowerCase() === ou.toLowerCase() && f > 0) {
+        const baseIsPcs = bu.toLowerCase() === 'pcs';
+        const otherIsPcs = ou.toLowerCase() === 'pcs';
+        const mappingReversed = baseIsPcs && !otherIsPcs;
+        return mappingReversed ? (q / f) : (q * f);
+    }
+    return q;
+}
+
+function getReturnRefundAmount() {
+    if (!isReturnMode || !originalSaleItemsByKey) return 0;
+
+    let refund = 0;
+    saleItems.forEach(item => {
+        const key = makeSaleItemKeyFromFields(item.productId, item.batchNumber, item.expiryDate);
+        const old = originalSaleItemsByKey[key];
+        if (!old) return;
+
+        const oldTotal = parseFloat(old.total);
+        const oldQty = Number.isFinite(parseFloat(old.qty)) ? parseFloat(old.qty) : (parseFloat(old.baseQty) || 0);
+        const oldUnit = old.saleUomName || old.uomName || item.saleUomName || item.uomName;
+        const newQty = parseFloat(item.quantity) || 0;
+
+        if (!Number.isFinite(oldTotal) || oldTotal <= 0 || oldQty <= 0) return;
+
+        const uomOpt = getCachedUomOptions(item.productId);
+        const baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
+        const otherUnit = normalizeUomName(uomOpt?.otherUomName);
+        const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+
+        const saleUnit = normalizeUomName(item.saleUomName) || normalizeUomName(item.uomName) || baseUnit;
+        const oldBaseQty = toBaseQty(oldQty, oldUnit, baseUnit, otherUnit, factor);
+        const newBaseQty = toBaseQty(newQty, saleUnit, baseUnit, otherUnit, factor);
+
+        if (oldBaseQty <= 0) return;
+
+        const returnedBaseQty = Math.max(0, oldBaseQty - newBaseQty);
+        if (returnedBaseQty <= 0) return;
+
+        const ratio = returnedBaseQty / oldBaseQty;
+        const lineRefund = round2(oldTotal * ratio);
+        refund = round2(refund + lineRefund);
+    });
+
+    return refund;
 }
 
 function getCachedUomOptions(productId) {
@@ -850,6 +935,24 @@ function formatExpiryDate(expiryDate) {
 }
 
 function getMaxQtyForItem(item) {
+    if (isReturnMode && originalSaleItemsByKey) {
+        const key = makeSaleItemKeyFromFields(item.productId, item.batchNumber, item.expiryDate);
+        const old = originalSaleItemsByKey[key];
+        if (old) {
+            const oldQty = Number.isFinite(parseFloat(old.qty)) ? parseFloat(old.qty) : (parseFloat(old.baseQty) || 0);
+            const oldUnit = old.saleUomName || old.uomName || item.saleUomName || item.uomName;
+
+            const uomOpt = getCachedUomOptions(item.productId);
+            let baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
+            let otherUnit = normalizeUomName(uomOpt?.otherUomName);
+            const saleUnit = normalizeUomName(item.saleUomName) || normalizeUomName(item.uomName) || baseUnit;
+            const factor = parseFloat(uomOpt?.conversionFactor) || 1;
+
+            const oldBaseQty = toBaseQty(oldQty, oldUnit, baseUnit, otherUnit, factor);
+            return fromBaseQty(oldBaseQty, saleUnit, baseUnit, otherUnit, factor);
+        }
+    }
+
     const stockQty = item.availableQty ?? item.availableQty;
     if (stockQty !== undefined && stockQty !== null) {
         const n = parseFloat(stockQty);
@@ -992,7 +1095,7 @@ function renderSaleItems() {
                     </select>`}
                 </td>
                 <td>
-                    <input type="number" class="item-qty-input" value="${item.quantity}" min="1" ${maxQtyAttr}
+                    <input type="number" class="item-qty-input" value="${item.quantity}" min="${isReturnMode ? 0 : 1}" ${maxQtyAttr}
                            oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
                 </td>
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
@@ -1054,18 +1157,28 @@ function updateSaleItemsSummary() {
 }
 
 function updateItemQuantity(index, value) {
-    const qty = parseInt(value) || 0;
-    if (qty <= 0) {
-        showToast('Quantity must be at least 1', 'error');
+    const qty = parseFloat(value);
+    if (!Number.isFinite(qty)) {
+        $(`#qty-${index}`).val(saleItems[index].quantity);
+        return;
+    }
+
+    const minQty = isReturnMode ? 0 : 1;
+    if (qty < minQty) {
+        showToast(`Quantity must be at least ${minQty}`, 'error');
         $(`#qty-${index}`).val(saleItems[index].quantity);
         return;
     }
     const maxQty = getMaxQtyForItem(saleItems[index]);
     if (maxQty > 0 && qty > maxQty) {
-        showToast(`Only ${maxQty} ${saleItems[index].unitType.toLowerCase()}(s) available`, 'error');
+        showToast(isReturnMode
+            ? `Return mode: quantity cannot exceed original sale quantity (${maxQty})`
+            : `Only ${maxQty} ${saleItems[index].unitType.toLowerCase()}(s) available`,
+            'error');
         $(`#qty-${index}`).val(saleItems[index].quantity);
         return;
     }
+
     saleItems[index].quantity = qty;
     recalculateItem(index);
     renderSaleItems();
@@ -1243,6 +1356,14 @@ function recalculateBill() {
     $('#billItemDiscount').text('- ' + formatCurrency(itemDiscount));
     $('#billGrandTotal').text(formatCurrency(displayGrandTotal));
 
+    if (isReturnMode) {
+        const refund = getReturnRefundAmount();
+        $('#billRefundAmount').text(formatCurrency(refund));
+        $('#billRefundRow').show();
+    } else {
+        $('#billRefundRow').hide();
+    }
+
     updateTaxBreakupUI();
 
     // Keep summary in sync with bill calculations
@@ -1258,6 +1379,12 @@ $('#additionalDiscountPercent').on('input', debounce(function () {
 }, 200));
 
 function updatePaymentAmount(grandTotal) {
+    if (isReturnMode) {
+        const refund = getReturnRefundAmount();
+        $('#cashAmount').val(refund.toFixed(2));
+        $('#changeAmount').text(formatCurrency(0));
+        return;
+    }
     // Auto-fill payment amounts
     if (selectedPaymentMethod === 'Cash') {
         const cashReceived = parseFloat($('#cashAmount').val()) || 0;
@@ -1337,8 +1464,8 @@ function getGrandTotal() {
 
 $('#cashAmount').on('input', function () {
     const received = parseFloat($(this).val()) || 0;
-    const grandTotal = getGrandTotal();
-    const change = received - grandTotal;
+    const displayGrandTotal = getGrandTotal();
+    const change = received - displayGrandTotal;
     $('#changeAmount').text(formatCurrency(Math.max(0, change)));
 });
 
@@ -1470,42 +1597,39 @@ function completeSale() {
         return;
     }
 
-    const grandTotal = getGrandTotal();
+    const grandTotal = isReturnMode ? getReturnRefundAmount() : getGrandTotal();
     let payments = [];
 
-    if (isReturnMode && selectedPaymentMethod === 'Split') {
-        $('#splitCash').val(grandTotal.toFixed(2));
-        $('#splitCard').val((0).toFixed(2));
-        $('#splitUpi').val((0).toFixed(2));
-        $('#splitRemaining').text(formatCurrency(0));
-    }
+    if (isReturnMode) {
+        payments = [{ paymentMode: 'Cash', amount: parseFloat(grandTotal.toFixed(2)), reference: null }];
+    } else {
+        if (selectedPaymentMethod === 'Cash') {
+            const cashReceived = parseFloat($('#cashAmount').val()) || 0;
+            payments.push({ paymentMode: 'Cash', amount: grandTotal, reference: `Cash received: ${cashReceived}` });
+        } else if (selectedPaymentMethod === 'Card') {
+            const cardRefNo = ($('#cardRefNo').val() || '').trim();
+            payments.push({ paymentMode: 'Card', amount: grandTotal, reference: cardRefNo || null });
+        } else if (selectedPaymentMethod === 'UPI') {
+            const upiRefNo = ($('#upiRefNo').val() || '').trim();
+            payments.push({ paymentMode: 'UPI', amount: grandTotal, reference: upiRefNo || null });
+        } else if (selectedPaymentMethod === 'Split') {
+            const cash = parseFloat($('#splitCash').val()) || 0;
+            const card = parseFloat($('#splitCard').val()) || 0;
+            const upi = parseFloat($('#splitUpi').val()) || 0;
+            if (Math.abs((cash + card + upi) - grandTotal) > 0.01) {
+                showToast('Split payment total does not match grand total', 'error');
+                return;
+            }
+            const splitCardRefNo = ($('#splitCardRefNo').val() || '').trim();
+            const splitUpiRefNo = ($('#splitUpiRefNo').val() || '').trim();
 
-    if (selectedPaymentMethod === 'Cash') {
-        const cashReceived = parseFloat($('#cashAmount').val()) || 0;
-        payments.push({ paymentMode: 'Cash', amount: grandTotal, reference: `Cash received: ${cashReceived}` });
-    } else if (selectedPaymentMethod === 'Card') {
-        const cardRefNo = ($('#cardRefNo').val() || '').trim();
-        payments.push({ paymentMode: 'Card', amount: grandTotal, reference: cardRefNo || null });
-    } else if (selectedPaymentMethod === 'UPI') {
-        const upiRefNo = ($('#upiRefNo').val() || '').trim();
-        payments.push({ paymentMode: 'UPI', amount: grandTotal, reference: upiRefNo || null });
-    } else if (selectedPaymentMethod === 'Split') {
-        const cash = parseFloat($('#splitCash').val()) || 0;
-        const card = parseFloat($('#splitCard').val()) || 0;
-        const upi = parseFloat($('#splitUpi').val()) || 0;
-        if (Math.abs((cash + card + upi) - grandTotal) > 0.01) {
-            showToast('Split payment total does not match grand total', 'error');
-            return;
+            const cardReference = splitCardRefNo || null;
+            const upiReference = splitUpiRefNo || null;
+
+            if (cash > 0) payments.push({ paymentMode: 'Cash', amount: parseFloat(cash.toFixed(2)), reference: null });
+            if (card > 0) payments.push({ paymentMode: 'Card', amount: parseFloat(card.toFixed(2)), reference: cardReference });
+            if (upi > 0) payments.push({ paymentMode: 'UPI', amount: parseFloat(upi.toFixed(2)), reference: upiReference });
         }
-        const splitCardRefNo = ($('#splitCardRefNo').val() || '').trim();
-        const splitUpiRefNo = ($('#splitUpiRefNo').val() || '').trim();
-
-        const cardReference = splitCardRefNo || null;
-        const upiReference = splitUpiRefNo || null;
-
-        if (cash > 0) payments.push({ paymentMode: 'Cash', amount: parseFloat(cash.toFixed(2)), reference: null });
-        if (card > 0) payments.push({ paymentMode: 'Card', amount: parseFloat(card.toFixed(2)), reference: cardReference });
-        if (upi > 0) payments.push({ paymentMode: 'UPI', amount: parseFloat(upi.toFixed(2)), reference: upiReference });
     }
 
     const fallbackName = ($('#newCustName').val() || '').trim() || null;
@@ -1578,6 +1702,8 @@ function startNewSale() {
     selectedPaymentMethod = 'Cash';
     editingSaleId = null;
     isReturnMode = false;
+    originalSaleItemsByKey = null;
+    originalSaleAdditionalDiscount = 0;
     window.__lastCompletedSaleId = null;
 
     // Reset UI
@@ -1593,13 +1719,17 @@ function startNewSale() {
     $('#advancedSearchResults').empty();
     $('#advBatchNumber, #advMedicineName, #advComposition, #advExpiryFrom, #advExpiryTo').val('');
 
-    renderSaleItems();
-
+    $('#additionalDiscountPercent').val(0);
     $('#additionalDiscount').val(0);
     recalculateBill();
 
     // Reset payment
     selectPaymentMethod('Cash');
+    $('#pmCard, #pmUpi, #pmSplit').show();
+    $('.payment-method-card').css('pointer-events', '');
+    $('#cashAmountLabel').text('Amount Received');
+    $('#cashChangeBlock').show();
+    $('#cashAmount').prop('readonly', false);
     $('#cashAmount').val('');
     $('#changeAmount').text(formatCurrency(0));
     $('#cardRefNo, #upiRefNo').val('');
@@ -1683,9 +1813,17 @@ function applyReturnModeLocks() {
     $('#additionalDiscountPercent').prop('disabled', true);
     $('#additionalDiscount').prop('disabled', true);
 
-    // Prevent changing payment method + amounts
+    // Cash-only refund
+    selectedPaymentMethod = 'Cash';
     $('.payment-method-card').css('pointer-events', 'none');
-    $('#cashAmount, #cardAmount, #upiAmount, #splitCash, #splitCard, #splitUpi').prop('readonly', true);
+    $('#pmCash').addClass('selected');
+    $('#pmCard, #pmUpi, #pmSplit').hide();
+    $('.payment-detail-form').removeClass('show');
+    $('#paymentCash').addClass('show');
+    $('#cashAmountLabel').text('Refund Amount');
+    $('#cashChangeBlock').hide();
+    $('#cashAmount').prop('readonly', true);
+    $('#cardAmount, #upiAmount, #splitCash, #splitCard, #splitUpi').prop('readonly', true);
     $('#cardRefNo, #upiRefNo, #splitCardRefNo, #splitUpiRefNo').prop('readonly', true);
 
     // Prevent add/remove/clear
@@ -1750,6 +1888,8 @@ function loadSaleForEdit(saleId) {
             // Items
             const items = data.items || [];
             saleItems = [];
+            originalSaleItemsByKey = {};
+            originalSaleAdditionalDiscount = parseFloat(data.additionalDiscount) || parseFloat(data.additionalDiscountAmount) || 0;
             items.forEach(i => {
                 const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
                 const resolvedName = readStockProductName(stock) || '';
@@ -1758,6 +1898,16 @@ function loadSaleForEdit(saleId) {
 
                 const qty = parseFloat(i.quantity) || 0;
                 const price = parseFloat(i.price) || 0;
+                const originalLineTotal = parseFloat(i.total);
+
+                const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
+                originalSaleItemsByKey[key] = {
+                    qty: qty,
+                    baseQty: qty,
+                    uomName: i.uomName || 'PCS',
+                    saleUomName: i.uomName || 'PCS',
+                    total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
+                };
 
                 const serverDiscPercent = parseFloat(i.discountPercent) || 0;
                 const serverDiscAmount = parseFloat(i.discountAmount) || 0;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,21 +43,36 @@ public sealed class StockService
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.TryAddWithoutValidation(TenantHeaderName, tenantId);
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException($"Stocks API call failed with status code {(int)response.StatusCode} ({response.ReasonPhrase}). Response: {body}");
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new HttpRequestException($"Stocks API call failed with status code {(int)response.StatusCode} ({response.ReasonPhrase}). Response: {body}");
+            }
+
+            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+            var payload = await JsonSerializer.DeserializeAsync<StockResponseDto>(
+                responseStream,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+                cancellationToken);
+
+            return payload?.Result ?? new List<StockDto>();
         }
-
-        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-
-        var payload = await JsonSerializer.DeserializeAsync<StockResponseDto>(
-            responseStream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
-            cancellationToken);
-
-        return payload?.Result ?? new List<StockDto>();
+        catch (HttpRequestException)
+        {
+            return new List<StockDto>();
+        }
+        catch (SocketException)
+        {
+            return new List<StockDto>();
+        }
+        catch (TaskCanceledException)
+        {
+            return new List<StockDto>();
+        }
     }
 
     public async Task<List<StockDto>> SearchBatchAsync(string query, int take = 20, CancellationToken cancellationToken = default)

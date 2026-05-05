@@ -43,7 +43,7 @@ builder.Services.AddRxnxtServices();
 // External API services
 builder.Services.AddHttpClient<StockService>();
 
-// Register Logging
+ // Register Logging
 builder.Services.AddRxnxtLogging();
 
 var app = builder.Build();

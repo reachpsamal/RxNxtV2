@@ -19,6 +19,8 @@ namespace Rxnxt.Business.Data
         public DbSet<SaleHeaderRow> SaleHeaders { get; set; }
         public DbSet<SaleDetailRow> SaleDetails { get; set; }
         public DbSet<SalePaymentRow> SalePayments { get; set; }
+        public DbSet<SalesReturnHeaderRow> SalesReturnHeaders { get; set; }
+        public DbSet<SalesReturnDetailRow> SalesReturnDetails { get; set; }
         public DbSet<ProductMasterRow> ProductMasters { get; set; }
         public DbSet<UomMasterRow> UomMasters { get; set; }
         public DbSet<CustomerMasterRow> CustomerMasters { get; set; }
@@ -34,6 +36,8 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<SaleHeaderRow>().ToTable("SaleHeader");
             modelBuilder.Entity<SaleDetailRow>().ToTable("SaleDetail");
             modelBuilder.Entity<SalePaymentRow>().ToTable("SalePayment");
+            modelBuilder.Entity<SalesReturnHeaderRow>().ToTable("SalesReturnHeader");
+            modelBuilder.Entity<SalesReturnDetailRow>().ToTable("SalesReturnDetail");
             modelBuilder.Entity<ProductMasterRow>().ToTable("ProductMaster");
             modelBuilder.Entity<UomMasterRow>().ToTable("UOMMaster");
             modelBuilder.Entity<CustomerMasterRow>().ToTable("CustomerMaster");

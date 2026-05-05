@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f53a4ff168e37a224ddddcb2dcdef82075ea9add")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4a7ba1ab736557167896e003463ae0cdd5f151fb")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

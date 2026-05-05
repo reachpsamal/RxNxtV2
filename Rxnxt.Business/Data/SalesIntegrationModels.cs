@@ -253,3 +253,140 @@ public sealed class CustomerMasterRow
     [StringLength(50)]
     public string? TenantId { get; set; }
 }
+
+[Table("SalesReturnHeader")]
+public sealed class SalesReturnHeaderRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string BillNo { get; set; } = string.Empty;
+
+    public DateTime BillDate { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string BillType { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string CustomerID { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string? Narration { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? BillAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? TaxAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? DiscountAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ExtraAdd { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ExtraLess { get; set; }
+
+    public bool ActiveStatus { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    public DateTime CreatedDate { get; set; }
+
+    [StringLength(50)]
+    public string? ModifiedBy { get; set; }
+
+    public DateTime? ModifiedDate { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? DiscountPerc { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? AmountBeforeTax { get; set; }
+
+    [StringLength(50)]
+    public string? SaleId { get; set; }
+
+    [NotMapped]
+    public decimal? RefundAmount { get; set; }
+
+    [NotMapped]
+    public decimal? CalculatedRefundAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? RoundOff { get; set; }
+}
+
+[Table("SalesReturnDetail")]
+public sealed class SalesReturnDetailRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string SaleID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string ProductID { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    public string? BatchNumber { get; set; }
+
+    public DateTime? ExpiryDate { get; set; }
+
+    [StringLength(50)]
+    public string? UnitID { get; set; }
+
+    [StringLength(50)]
+    public string? PackTypeID { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MRP { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? PurchasePrice { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal? SalePrice { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? FreeQty { get; set; }
+
+    [StringLength(500)]
+    public string? Remarks { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? Qty { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+
+    [StringLength(50)]
+    public string? BaseUOMID { get; set; }
+
+    [StringLength(50)]
+    public string? SaleUOMID { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? SaleUOMQty { get; set; }
+}

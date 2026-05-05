@@ -304,6 +304,11 @@
                 <span class="value" id="billGrandTotal">₹ 0.00</span>
             </div>
 
+            <div class="bill-row" id="billRefundRow" style="display:none;">
+                <span class="label">Deduct Amount</span>
+                <span class="value" id="billRefundAmount">₹ 0.00</span>
+            </div>
+
             <hr class="bill-divider">
 
             <label class="form-label-custom" style="margin-bottom: 10px;">Select Payment Method</label>
@@ -330,12 +335,18 @@
             <div class="payment-detail-form show" id="paymentCash">
                 <div class="row g-2">
                     <div class="col-md-4">
-                        <label class="form-label-custom">Amount Received</label>
-                        <input type="number" class="pharmacy-input" id="cashAmount" placeholder="0.00" step="0.01">
+                        <label class="form-label-custom" id="cashAmountLabel">Amount Received</label>
+                        <input type="number" class="pharmacy-input" id="cashAmount" placeholder="0.00" min="0" step="0.01">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label-custom">Change</label>
-                        <div style="padding: 10px 14px; background: var(--accent-50); border-radius: var(--radius-md); font-weight: 700; color: var(--accent-700); font-size: 1.1rem;" id="changeAmount">₹ 0.00</div>
+                        <div id="cashChangeBlock">
+                            <label class="form-label-custom">Change</label>
+                            <div class="pharmacy-input" style="display:flex; align-items:center; height:42px;">₹ <span id="changeAmount" style="margin-left:4px;">0.00</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Note</label>
+                        <input type="text" class="pharmacy-input" id="cashNote" placeholder="Optional">
                     </div>
                 </div>
             </div>

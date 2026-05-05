@@ -846,6 +846,14 @@ namespace Rxnxt.Business.Implementations
 
                         if (request.ReturnMode)
                         {
+                            static decimal Round2(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+                            static bool Matches(string a, string b) =>
+                                !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
+                                string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+                            var uomIdCacheByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
                             if (!string.Equals((header.CustomerID ?? string.Empty).Trim(), (customerIdStr ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
                             {
                                 return new SaleResult { Success = false, Message = "Return mode: customer cannot be changed." };
@@ -867,6 +875,15 @@ namespace Rxnxt.Business.Implementations
                             if (!oldKeySet.SetEquals(newKeySet))
                             {
                                 return new SaleResult { Success = false, Message = "Return mode: items cannot be added/removed/changed." };
+                            }
+
+                            // Enforce cash-only refund on return
+                            var nonZeroPayments = request.Payments
+                                .Where(p => p != null && p.Amount != 0)
+                                .ToList();
+                            if (nonZeroPayments.Count != 1 || !string.Equals((nonZeroPayments[0].PaymentMode ?? string.Empty).Trim(), "Cash", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return new SaleResult { Success = false, Message = "Return mode: refund must be Cash only." };
                             }
 
                             foreach (var i in request.Items)
@@ -976,33 +993,321 @@ namespace Rxnxt.Business.Implementations
                                 {
                                     return new SaleResult { Success = false, Message = "Return mode: tax cannot be changed." };
                                 }
-                            }
 
-                            var oldModes = oldPayments
-                                .Select(p => ((p.PaymentMode ?? string.Empty).Trim(), (p.ReferenceNo ?? string.Empty).Trim()))
-                                .OrderBy(x => x.Item1, StringComparer.OrdinalIgnoreCase)
-                                .ThenBy(x => x.Item2, StringComparer.OrdinalIgnoreCase)
-                                .ToList();
+                                // Only allow decreasing quantity (in base UOM)
+                                var oldBaseQty = old.Qty ?? 0m;
+                                if (oldBaseQty < 0) oldBaseQty = 0m;
 
-                            var newModes = request.Payments
-                                .Select(p => ((p.PaymentMode ?? string.Empty).Trim(), (p.Reference ?? string.Empty).Trim()))
-                                .OrderBy(x => x.Item1, StringComparer.OrdinalIgnoreCase)
-                                .ThenBy(x => x.Item2, StringComparer.OrdinalIgnoreCase)
-                                .ToList();
+                                var productIdStrForQty = i.ProductId.ToString();
+                                var pmForQty = await _context.ProductMasters
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(p => p.UniqueID == productIdStrForQty);
 
-                            if (oldModes.Count != newModes.Count)
-                            {
-                                return new SaleResult { Success = false, Message = "Return mode: payment methods cannot be changed." };
-                            }
-
-                            for (var idx = 0; idx < oldModes.Count; idx++)
-                            {
-                                if (!string.Equals(oldModes[idx].Item1, newModes[idx].Item1, StringComparison.OrdinalIgnoreCase) ||
-                                    !string.Equals(oldModes[idx].Item2, newModes[idx].Item2, StringComparison.OrdinalIgnoreCase))
+                                decimal newRequiredBaseQty;
+                                if (pmForQty == null)
                                 {
-                                    return new SaleResult { Success = false, Message = "Return mode: payment methods cannot be changed." };
+                                    newRequiredBaseQty = i.Quantity;
+                                }
+                                else
+                                {
+                                    var baseUomId2 = (pmForQty.UOMID ?? string.Empty).Trim();
+                                    var otherUomId2 = (pmForQty.OtherUOMID ?? string.Empty).Trim();
+                                    var factor2 = pmForQty.ConversionFactor.GetValueOrDefault(1m);
+                                    if (factor2 <= 0) factor2 = 1m;
+
+                                    var uomIds2 = new[] { baseUomId2, otherUomId2 }
+                                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                                        .ToList();
+
+                                    var uomNameById2 = uomIds2.Count == 0
+                                        ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                        : await _context.UomMasters
+                                            .AsNoTracking()
+                                            .Where(u => uomIds2.Contains(u.UniqueID))
+                                            .Select(u => new { u.UniqueID, u.UOMName })
+                                            .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                                    var baseName2 = (!string.IsNullOrWhiteSpace(baseUomId2) && uomNameById2.TryGetValue(baseUomId2, out var bn2)) ? bn2 : string.Empty;
+                                    var otherName2 = (!string.IsNullOrWhiteSpace(otherUomId2) && uomNameById2.TryGetValue(otherUomId2, out var on2)) ? on2 : string.Empty;
+
+                                    var isPcsStripPair2 =
+                                        (Matches(baseName2, "PCS") && Matches(otherName2, "STRIP")) ||
+                                        (Matches(baseName2, "STRIP") && Matches(otherName2, "PCS"));
+
+                                    if (isPcsStripPair2)
+                                    {
+                                        if (Matches(baseName2, "PCS"))
+                                        {
+                                            if (Matches(newUnit, "PCS")) newRequiredBaseQty = i.Quantity;
+                                            else if (Matches(newUnit, "STRIP")) newRequiredBaseQty = i.Quantity * factor2;
+                                            else return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                        else if (Matches(baseName2, "STRIP"))
+                                        {
+                                            if (Matches(newUnit, "STRIP")) newRequiredBaseQty = i.Quantity;
+                                            else if (Matches(newUnit, "PCS")) newRequiredBaseQty = i.Quantity / factor2;
+                                            else return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                        else
+                                        {
+                                            return new SaleResult { Success = false, Message = $"Conversion not possible for {i.ProductName}. Please contact admin to fix UOM mapping." };
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (Matches(newUnit, baseName2) || Matches(newUnit, i.UomName))
+                                        {
+                                            newRequiredBaseQty = i.Quantity;
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(otherName2) && Matches(newUnit, otherName2))
+                                        {
+                                            var baseIsPcs2 = string.Equals(baseName2?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                            var otherIsPcs2 = string.Equals(otherName2?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                            var mappingReversed2 = baseIsPcs2 && !otherIsPcs2;
+                                            newRequiredBaseQty = mappingReversed2 ? (i.Quantity * factor2) : (i.Quantity / factor2);
+                                        }
+                                        else
+                                        {
+                                            return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                    }
+                                }
+
+                                if (newRequiredBaseQty > oldBaseQty + 0.0001m)
+                                {
+                                    return new SaleResult { Success = false, Message = "Return mode: quantity can only be decreased." };
                                 }
                             }
+
+                            // Persist return separately: do NOT modify original sale header/details/payments.
+                            var returnUniqueId = Guid.NewGuid().ToString();
+                            var returnBillType = "SalesReturn";
+
+                            var returnDetailRows = new List<Rxnxt.Business.Data.SalesReturnDetailRow>();
+
+                            decimal refundBillAmount = 0m;
+                            decimal refundTaxAmount = 0m;
+                            decimal refundDiscountAmount = 0m;
+                            decimal refundAmountBeforeTax = 0m;
+
+                            foreach (var i in request.Items)
+                            {
+                                var newUnit = (i.SaleUomName ?? i.UomName ?? string.Empty).Trim();
+                                var old = oldDetails.FirstOrDefault(d =>
+                                    string.Equals((d.ProductID ?? string.Empty).Trim(), i.ProductId.ToString().Trim(), StringComparison.OrdinalIgnoreCase) &&
+                                    string.Equals(NormalizeBatch(d.BatchNumber), NormalizeBatch(i.BatchNumber), StringComparison.OrdinalIgnoreCase) &&
+                                    d.ExpiryDate.HasValue &&
+                                    d.ExpiryDate.Value.Date == i.ExpiryDate.Date);
+
+                                if (old == null) continue;
+
+                                var oldBaseQty = old.Qty ?? 0m;
+                                if (oldBaseQty <= 0) continue;
+
+                                // Use already-computed conversion logic for new required base qty
+                                var productIdStr = i.ProductId.ToString();
+                                var stockRow = await FindStockAsync(productIdStr, i.BatchNumber, i.ExpiryDate);
+                                if (stockRow == null)
+                                {
+                                    return new SaleResult { Success = false, Message = $"Stock not found for {i.ProductName} / {i.BatchNumber}" };
+                                }
+
+                                var pm = await _context.ProductMasters
+                                    .AsNoTracking()
+                                    .FirstOrDefaultAsync(p => p.UniqueID == productIdStr);
+
+                                decimal newRequiredBaseQty;
+                                if (pm == null)
+                                {
+                                    newRequiredBaseQty = i.Quantity;
+                                }
+                                else
+                                {
+                                    var baseUomId = (pm.UOMID ?? string.Empty).Trim();
+                                    var otherUomId = (pm.OtherUOMID ?? string.Empty).Trim();
+                                    var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+                                    if (factor <= 0) factor = 1m;
+
+                                    var uomIds = new[] { baseUomId, otherUomId }
+                                        .Where(x => !string.IsNullOrWhiteSpace(x))
+                                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                                        .ToList();
+
+                                    var uomNameById = uomIds.Count == 0
+                                        ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                                        : await _context.UomMasters
+                                            .AsNoTracking()
+                                            .Where(u => uomIds.Contains(u.UniqueID))
+                                            .Select(u => new { u.UniqueID, u.UOMName })
+                                            .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                                    var baseName = (!string.IsNullOrWhiteSpace(baseUomId) && uomNameById.TryGetValue(baseUomId, out var bn)) ? bn : string.Empty;
+                                    var otherName = (!string.IsNullOrWhiteSpace(otherUomId) && uomNameById.TryGetValue(otherUomId, out var on)) ? on : string.Empty;
+
+                                    var isPcsStripPair =
+                                        (Matches(baseName, "PCS") && Matches(otherName, "STRIP")) ||
+                                        (Matches(baseName, "STRIP") && Matches(otherName, "PCS"));
+
+                                    if (isPcsStripPair)
+                                    {
+                                        if (Matches(baseName, "PCS"))
+                                        {
+                                            if (Matches(newUnit, "PCS")) newRequiredBaseQty = i.Quantity;
+                                            else if (Matches(newUnit, "STRIP")) newRequiredBaseQty = i.Quantity * factor;
+                                            else return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                        else if (Matches(baseName, "STRIP"))
+                                        {
+                                            if (Matches(newUnit, "STRIP")) newRequiredBaseQty = i.Quantity;
+                                            else if (Matches(newUnit, "PCS")) newRequiredBaseQty = i.Quantity / factor;
+                                            else return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                        else
+                                        {
+                                            return new SaleResult { Success = false, Message = $"Conversion not possible for {i.ProductName}. Please contact admin to fix UOM mapping." };
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (Matches(newUnit, baseName) || Matches(newUnit, i.UomName))
+                                        {
+                                            newRequiredBaseQty = i.Quantity;
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(otherName) && Matches(newUnit, otherName))
+                                        {
+                                            var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                            var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                                            var mappingReversed = baseIsPcs && !otherIsPcs;
+                                            newRequiredBaseQty = mappingReversed ? (i.Quantity * factor) : (i.Quantity / factor);
+                                        }
+                                        else
+                                        {
+                                            return new SaleResult { Success = false, Message = $"Invalid unit '{newUnit}' for {i.ProductName}." };
+                                        }
+                                    }
+                                }
+
+                                var returnedBaseQty = oldBaseQty - newRequiredBaseQty;
+                                if (returnedBaseQty <= 0) continue;
+
+                                // Add stock back
+                                stockRow.PackQty = (stockRow.PackQty ?? 0m) + returnedBaseQty;
+
+                                var oldItemTotal = old.ItemTotal ?? 0m;
+                                var oldTax = old.TotalTaxAmount ?? 0m;
+                                var oldTaxable = old.TaxableAmount ?? 0m;
+                                var oldDisc = old.ItemDiscAmount ?? 0m;
+
+                                var ratio = returnedBaseQty / oldBaseQty;
+                                var returnLineTotal = Round2(oldItemTotal * ratio);
+                                var returnTax = Round2(oldTax * ratio);
+                                var returnTaxable = Round2(oldTaxable * ratio);
+                                var returnDisc = Round2(oldDisc * ratio);
+
+                                refundBillAmount += returnLineTotal;
+                                refundTaxAmount += returnTax;
+                                refundAmountBeforeTax += returnTaxable;
+                                refundDiscountAmount += returnDisc;
+
+                                string? resolvedSaleUomId = null;
+                                if (!string.IsNullOrWhiteSpace(newUnit))
+                                {
+                                    if (!uomIdCacheByName.TryGetValue(newUnit, out var cachedUomId))
+                                    {
+                                        var newUnitNorm = newUnit.Trim().ToLower();
+                                        var uom = await _context.UomMasters
+                                            .AsNoTracking()
+                                            .FirstOrDefaultAsync(u => u.UOMName != null && u.UOMName.Trim().ToLower() == newUnitNorm);
+                                        cachedUomId = uom?.UniqueID ?? string.Empty;
+                                        uomIdCacheByName[newUnit] = cachedUomId;
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(cachedUomId))
+                                    {
+                                        resolvedSaleUomId = cachedUomId;
+                                    }
+                                }
+
+                                // Prefer old detail's UOM IDs to match DB expectations
+                                resolvedSaleUomId ??= old.SaleUOMID;
+                                var resolvedBaseUomId = old.BaseUOMID;
+
+                                returnDetailRows.Add(new Rxnxt.Business.Data.SalesReturnDetailRow
+                                {
+                                    UniqueID = Guid.NewGuid().ToString(),
+                                    SaleID = returnUniqueId,
+                                    ProductID = productIdStr,
+                                    BatchNumber = i.BatchNumber,
+                                    ExpiryDate = i.ExpiryDate,
+                                    UnitID = null,
+                                    PackTypeID = null,
+                                    MRP = i.UnitPrice,
+                                    PurchasePrice = null,
+                                    SalePrice = i.UnitPrice,
+                                    FreeQty = 0m,
+                                    Remarks = null,
+                                    Qty = returnedBaseQty,
+                                    TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
+                                    BaseUOMID = resolvedBaseUomId,
+                                    SaleUOMID = resolvedSaleUomId,
+                                    SaleUOMQty = null
+                                });
+                            }
+
+                            refundBillAmount = Round2(refundBillAmount);
+                            refundTaxAmount = Round2(refundTaxAmount);
+                            refundAmountBeforeTax = Round2(refundAmountBeforeTax);
+                            refundDiscountAmount = Round2(refundDiscountAmount);
+
+                            var refundRounded = Math.Round(refundBillAmount, 0, MidpointRounding.AwayFromZero);
+                            var refundRoundOff = refundRounded - refundBillAmount;
+
+                            var returnHeader = new Rxnxt.Business.Data.SalesReturnHeaderRow
+                            {
+                                UniqueID = returnUniqueId,
+                                BillNo = "SR-0",
+                                BillDate = now,
+                                BillType = returnBillType,
+                                CustomerID = header.CustomerID ?? customerIdStr,
+                                Narration = null,
+                                BillAmount = refundBillAmount,
+                                TaxAmount = refundTaxAmount,
+                                DiscountAmount = refundDiscountAmount,
+                                ExtraAdd = 0m,
+                                ExtraLess = 0m,
+                                ActiveStatus = true,
+                                CreatedBy = createdBy,
+                                CreatedDate = now,
+                                ModifiedBy = null,
+                                ModifiedDate = null,
+                                TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId,
+                                DiscountPerc = 0m,
+                                AmountBeforeTax = refundAmountBeforeTax,
+                                SaleId = headerUniqueId,
+                                RoundOff = refundRoundOff
+                            };
+
+                            _context.SalesReturnHeaders.Add(returnHeader);
+                            await _context.SaveChangesAsync();
+
+                            if (returnDetailRows.Count > 0)
+                            {
+                                _context.SalesReturnDetails.AddRange(returnDetailRows);
+                                await _context.SaveChangesAsync();
+                            }
+
+                            returnHeader.BillNo = $"SR-{returnHeader.ID}";
+                            await _context.SaveChangesAsync();
+
+                            await transaction.CommitAsync();
+
+                            return new SaleResult
+                            {
+                                Success = true,
+                                Message = "Return saved successfully!",
+                                SaleId = header.ID,
+                                InvoiceNumber = returnHeader.BillNo
+                            };
                         }
 
                         foreach (var d in oldDetails)
@@ -1436,7 +1741,8 @@ namespace Rxnxt.Business.Implementations
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return new SaleResult { Success = false, Message = $"Error completing sale: {ex.Message}" };
+                var inner = ex.InnerException?.Message;
+                return new SaleResult { Success = false, Message = $"Error completing sale: {ex.Message}{(string.IsNullOrWhiteSpace(inner) ? string.Empty : " | " + inner)}" };
             }
         }
 
