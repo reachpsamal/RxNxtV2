@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Web")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4a7ba1ab736557167896e003463ae0cdd5f151fb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8d403153491f3178e96eb775f11e291b838b540d")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Web")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Web")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
