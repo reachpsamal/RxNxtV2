@@ -16,6 +16,11 @@ namespace Rxnxt.Business.Data
         public DbSet<SaleItem> SaleItems { get; set; }
         public DbSet<Payment> Payments { get; set; }
 
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<Purchase> Purchases { get; set; }
+        public DbSet<PurchaseItem> PurchaseItems { get; set; }
+        public DbSet<PurchasePayment> PurchasePayments { get; set; }
+
         public DbSet<SaleHeaderRow> SaleHeaders { get; set; }
         public DbSet<SaleDetailRow> SaleDetails { get; set; }
         public DbSet<SalePaymentRow> SalePayments { get; set; }
@@ -97,6 +102,37 @@ namespace Rxnxt.Business.Data
                 entity.HasOne(e => e.Sale)
                       .WithMany(s => s.Payments)
                       .HasForeignKey(e => e.SaleId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Supplier>(entity =>
+            {
+                entity.HasIndex(e => e.Name);
+                entity.HasIndex(e => e.Phone);
+            });
+
+            modelBuilder.Entity<Purchase>(entity =>
+            {
+                entity.HasIndex(e => new { e.SupplierId, e.SupplierInvoiceNo }).IsUnique();
+                entity.HasOne(e => e.Supplier)
+                      .WithMany(s => s.Purchases)
+                      .HasForeignKey(e => e.SupplierId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<PurchaseItem>(entity =>
+            {
+                entity.HasOne(e => e.Purchase)
+                      .WithMany(p => p.Items)
+                      .HasForeignKey(e => e.PurchaseId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PurchasePayment>(entity =>
+            {
+                entity.HasOne(e => e.Purchase)
+                      .WithMany(p => p.Payments)
+                      .HasForeignKey(e => e.PurchaseId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

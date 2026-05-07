@@ -66,6 +66,10 @@
                     <i class="bi bi-clock-history"></i>
                     <span>History</span>
                 </a>
+                <a href="@Url.Action("Index", "Purchase")" class="nav-item @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" && ViewContext.RouteData.Values["controller"]?.ToString() == "Purchase" ? "active" : "")" title="Purchase Entry">
+                    <i class="bi bi-bag-plus"></i>
+                    <span>Purchase</span>
+                </a>
                 <a href="#" class="nav-item" title="Inventory">
                     <i class="bi bi-box-seam"></i>
                     <span>Inventory</span>

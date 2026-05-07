@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
 using Rxnxt.Domain.Models;
@@ -12,16 +14,25 @@ namespace Rxnxt.Web.Controllers
     {
         private readonly ICustomerRepository _customerRepo;
         private readonly ISaleRepository _saleRepo;
+        private readonly ISupplierRepository _supplierRepo;
+        private readonly IPurchaseRepository _purchaseRepo;
         private readonly StockService _stockService;
+        private readonly PharmacyDbContext _db;
 
         public ApiController(
             ICustomerRepository customerRepo,
             ISaleRepository saleRepo,
-            StockService stockService)
+            ISupplierRepository supplierRepo,
+            IPurchaseRepository purchaseRepo,
+            StockService stockService,
+            PharmacyDbContext db)
         {
             _customerRepo = customerRepo;
             _saleRepo = saleRepo;
+            _supplierRepo = supplierRepo;
+            _purchaseRepo = purchaseRepo;
             _stockService = stockService;
+            _db = db;
         }
 
         // ==================== CUSTOMER ENDPOINTS ====================
@@ -33,6 +44,73 @@ namespace Rxnxt.Web.Controllers
                 return Ok(new List<CustomerSearchResult>());
 
             var results = await _customerRepo.SearchAsync(q);
+            return Ok(results);
+        }
+
+        // ==================== PRODUCT MASTER ENDPOINTS ====================
+
+        [HttpGet("products/search")]
+        public async Task<IActionResult> SearchProducts([FromQuery] string q)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+                return Ok(new List<object>());
+
+            var term = q.Trim();
+            var termLower = term.ToLowerInvariant();
+
+            var rows = await _db.ProductMasters
+                .AsNoTracking()
+                .Where(p => p.ProductName != null && p.ProductName.ToLower().Contains(termLower))
+                .OrderBy(p => p.ProductName)
+                .Take(20)
+                .ToListAsync();
+
+            var results = rows
+                .Select(p =>
+                {
+                    var ok = Guid.TryParse(p.UniqueID, out var guid);
+                    if (!ok) return null;
+                    return new { productId = guid, productName = p.ProductName ?? string.Empty };
+                })
+                .Where(x => x != null)
+                .ToList();
+
+            return Ok(results);
+        }
+
+        // ==================== PRODUCT STOCK ENDPOINTS ====================
+
+        [HttpGet("product-stocks/batches")]
+        public async Task<IActionResult> GetProductStockBatches([FromQuery] Guid productId, [FromQuery] string? q)
+        {
+            if (productId == Guid.Empty)
+                return BadRequest(new { message = "productId is required" });
+
+            var productIdString = productId.ToString();
+            var term = (q ?? string.Empty).Trim();
+
+            var query = _db.ProductStocks
+                .AsNoTracking()
+                .Where(s => s.ProductID == productIdString);
+
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                var termLower = term.ToLowerInvariant();
+                query = query.Where(s => s.BatchNumber != null && s.BatchNumber.ToLower().Contains(termLower));
+            }
+
+            var results = await query
+                .OrderBy(s => s.BatchNumber)
+                .ThenBy(s => s.ExpiryDate)
+                .Select(s => new
+                {
+                    batchNumber = s.BatchNumber ?? string.Empty,
+                    expiryDate = s.ExpiryDate,
+                    availableQty = s.PackQty ?? 0m
+                })
+                .Take(20)
+                .ToListAsync();
+
             return Ok(results);
         }
 
@@ -48,6 +126,35 @@ namespace Rxnxt.Web.Controllers
                 Phone = customer.Phone,
                 Email = customer.Email,
                 LoyaltyPoints = customer.LoyaltyPoints
+            });
+        }
+
+        // ==================== SUPPLIER ENDPOINTS ====================
+
+        [HttpGet("suppliers/search")]
+        public async Task<IActionResult> SearchSuppliers([FromQuery] string q)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+                return Ok(new List<SupplierSearchResult>());
+
+            var results = await _supplierRepo.SearchAsync(q);
+            return Ok(results);
+        }
+
+        [HttpPost("suppliers")]
+        public async Task<IActionResult> CreateSupplier([FromBody] Supplier supplier)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var created = await _supplierRepo.CreateAsync(supplier);
+            return Ok(new SupplierSearchResult
+            {
+                Id = created.Id,
+                Name = created.Name,
+                Phone = created.Phone,
+                Gstin = created.Gstin,
+                Address = created.Address
             });
         }
 
@@ -197,6 +304,21 @@ namespace Rxnxt.Web.Controllers
                 return BadRequest(new SaleResult { Success = false, Message = "No items in the sale" });
 
             var result = await _saleRepo.CompleteSaleAsync(request);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
+
+        // ==================== PURCHASE ENDPOINTS ====================
+
+        [HttpPost("purchases/complete")]
+        public async Task<IActionResult> CompletePurchase([FromBody] CompletePurchaseRequest request)
+        {
+            if (request.Items == null || !request.Items.Any())
+                return BadRequest(new PurchaseResult { Success = false, Message = "No items in the purchase" });
+
+            var result = await _purchaseRepo.CompletePurchaseAsync(request);
             if (!result.Success)
                 return BadRequest(result);
 

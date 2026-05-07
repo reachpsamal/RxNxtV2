@@ -960,17 +960,17 @@ function getMaxQtyForItem(item) {
 
         if (item.productId) {
             const uomOpt = getCachedUomOptions(item.productId);
-            let baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
-            let otherUnit = normalizeUomName(uomOpt?.otherUomName);
-            if (baseUnit && otherUnit && baseUnit.toLowerCase() === 'pcs' && otherUnit.toLowerCase() !== 'pcs') {
-                const tmp = baseUnit;
-                baseUnit = otherUnit;
-                otherUnit = tmp;
+            let baseUnitName = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
+            let otherUnitName = normalizeUomName(uomOpt?.otherUomName);
+            if (baseUnitName && otherUnitName && baseUnitName.toLowerCase() === 'pcs' && otherUnitName.toLowerCase() !== 'pcs') {
+                const tmp = baseUnitName;
+                baseUnitName = otherUnitName;
+                otherUnitName = tmp;
             }
-            const saleUnit = normalizeUomName(item.saleUomName) || baseUnit;
+            const saleUnit = normalizeUomName(item.saleUomName) || baseUnitName;
             const factor = parseFloat(uomOpt?.conversionFactor) || 1;
 
-            if (otherUnit && baseUnit && saleUnit.toLowerCase() === otherUnit.toLowerCase() && factor > 0) {
+            if (otherUnitName && baseUnitName && saleUnit.toLowerCase() === otherUnitName.toLowerCase() && factor > 0) {
                 return baseQty * factor;
             }
         }
@@ -1382,14 +1382,14 @@ function updatePaymentAmount(grandTotal) {
     if (isReturnMode) {
         const refund = getReturnRefundAmount();
         $('#cashAmount').val(refund.toFixed(2));
-        $('#changeAmount').text(formatCurrency(0));
+        $('#changeAmount').text((0).toFixed(2));
         return;
     }
     // Auto-fill payment amounts
     if (selectedPaymentMethod === 'Cash') {
         const cashReceived = parseFloat($('#cashAmount').val()) || 0;
         const change = cashReceived - grandTotal;
-        $('#changeAmount').text(formatCurrency(Math.max(0, change)));
+        $('#changeAmount').text((Math.max(0, change)).toFixed(2));
     } else if (selectedPaymentMethod === 'Card') {
         if (!isPrefillingEditSale) {
             $('#cardAmount').val(grandTotal.toFixed(2));
@@ -1466,7 +1466,7 @@ $('#cashAmount').on('input', function () {
     const received = parseFloat($(this).val()) || 0;
     const displayGrandTotal = getGrandTotal();
     const change = received - displayGrandTotal;
-    $('#changeAmount').text(formatCurrency(Math.max(0, change)));
+    $('#changeAmount').text((Math.max(0, change)).toFixed(2));
 });
 
 $('#splitCash').on('input', function () {
@@ -1731,9 +1731,8 @@ function startNewSale() {
     $('#cashChangeBlock').show();
     $('#cashAmount').prop('readonly', false);
     $('#cashAmount').val('');
-    $('#changeAmount').text(formatCurrency(0));
+    $('#changeAmount').text((0).toFixed(2));
     $('#cardRefNo, #upiRefNo').val('');
-    $('#splitCardRefNo, #splitUpiRefNo').val('');
     $('#splitCash, #splitCard, #splitUpi').val('');
 
     $('#completeSaleBtn').prop('disabled', true).html('<i class="bi bi-check-circle"></i> Complete Sale');

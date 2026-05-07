@@ -821,7 +821,7 @@ body {
 }
 
 .sale-items-table tbody td {
-    padding: 4px 6px;
+    padding: 2px 4px;
     border-bottom: 1px solid var(--gray-100);
     vertical-align: middle;
 }

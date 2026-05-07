@@ -21,6 +21,10 @@
       "PackagePath": "staticwebassets\\favicon.ico"
     },
     {
+      "Id": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\js\\pharmacy-purchase.js",
+      "PackagePath": "staticwebassets\\js\\pharmacy-purchase.js"
+    },
+    {
       "Id": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Web\\wwwroot\\js\\pharmacy-sales.js",
       "PackagePath": "staticwebassets\\js\\pharmacy-sales.js"
     },

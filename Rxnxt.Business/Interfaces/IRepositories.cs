@@ -34,4 +34,17 @@ namespace Rxnxt.Business.Interfaces
         Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q);
         Task<bool> CancelSaleAsync(int id);
     }
+
+    public interface ISupplierRepository
+    {
+        Task<List<SupplierSearchResult>> SearchAsync(string query);
+        Task<Supplier> CreateAsync(Supplier supplier);
+        Task<Supplier?> GetByIdAsync(int id);
+    }
+
+    public interface IPurchaseRepository
+    {
+        Task<PurchaseResult> CompletePurchaseAsync(CompletePurchaseRequest request);
+        Task<Purchase?> GetByIdAsync(int id);
+    }
 }

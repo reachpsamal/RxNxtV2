@@ -1,0 +1,228 @@
+@model Rxnxt.Web.ViewModels.PurchaseViewModel
+
+@{
+    ViewData["Title"] = "Purchase Entry";
+}
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="row g-3" id="purchasePageLayout">
+    <div class="col-lg-8">
+        <div class="section-card" id="purchaseItemSection">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-bag-plus"></i>
+                    Purchase Items
+                </div>
+                <button class="btn-ghost" onclick="clearAllPurchaseItems()" id="clearPurchaseBtn" style="display:none;">
+                    <i class="bi bi-trash3"></i> Clear All
+                </button>
+            </div>
+            <div class="section-body">
+                <div class="row g-2" style="margin-top: 4px;">
+                    <div class="col-lg-3 col-md-6" style="position: relative;">
+                        <label class="form-label-custom">Product <span style="color:var(--danger-500)">*</span></label>
+                        <div class="input-group-pharmacy" style="position: relative;">
+                            <i class="bi bi-search input-icon"></i>
+                            <input type="text" class="pharmacy-input" id="purchaseProductSearch" placeholder="Search product" autocomplete="off">
+                            <div class="autocomplete-dropdown" id="purchaseProductDropdown"></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-2 col-md-6" style="position: relative;">
+                        <label class="form-label-custom">Batch No <span style="color:var(--danger-500)">*</span></label>
+                        <input type="text" class="pharmacy-input" id="purchaseBatchSearch" placeholder="Batch" autocomplete="off" disabled>
+                        <div class="autocomplete-dropdown" id="purchaseBatchDropdown"></div>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">Unit <span style="color:var(--danger-500)">*</span></label>
+                        <select class="pharmacy-input" id="purchaseUnit" disabled>
+                            <option value="Pack">Pack</option>
+                            <option value="Strip" selected>Strip</option>
+                            <option value="Tablet">Tablet</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">Qty <span style="color:var(--danger-500)">*</span></label>
+                        <input type="number" class="pharmacy-input" id="purchaseEntryQty" placeholder="0" min="0" step="0.01" disabled>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">Rate</label>
+                        <input type="number" class="pharmacy-input" id="purchaseEntryRate" placeholder="0.00" min="0" step="0.01" disabled>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">MRP</label>
+                        <input type="number" class="pharmacy-input" id="purchaseEntryMrp" placeholder="0.00" min="0" step="0.01" disabled>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">Disc %</label>
+                        <input type="number" class="pharmacy-input" id="purchaseEntryDiscPct" placeholder="0" min="0" step="0.01" disabled>
+                    </div>
+                    <div class="col-lg-1 col-md-3">
+                        <label class="form-label-custom">GST %</label>
+                        <input type="number" class="pharmacy-input" id="purchaseEntryGstPct" placeholder="0" min="0" step="0.01" disabled>
+                    </div>
+                    <div class="col-lg-1 col-md-12" style="display:flex; align-items:end; justify-content:flex-end;">
+                        <button class="btn-success-pharmacy" type="button" id="purchaseAddItemBtn" onclick="addPurchaseEntryItem()" disabled style="width:100%;">
+                            <i class="bi bi-plus-circle"></i> Add
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sale-items-container" style="margin-top: 10px;">
+                    <div class="empty-cart" id="emptyPurchaseCart">
+                        <i class="bi bi-bag"></i>
+                        <p>No items added yet</p>
+                        <span>Search and add products to start purchase entry</span>
+                    </div>
+
+                    <table class="sale-items-table purchase-items-table" id="purchaseItemsTable" style="display:none;">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Product</th>
+                                <th>Batch</th>
+                                <th>Expiry</th>
+                                <th>Unit</th>
+                                <th>Qty</th>
+                                <th>Rate</th>
+                                <th>MRP</th>
+                                <th>Disc %</th>
+                                <th>Disc Amt</th>
+                                <th>GST %</th>
+                                <th class="text-right">Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchaseItemsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="section-card" id="supplierSection">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-truck"></i>
+                    Supplier & Invoice
+                </div>
+            </div>
+            <div class="section-body">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label-custom">Supplier <span style="color:var(--danger-500)">*</span></label>
+                        <div class="input-group-pharmacy" style="position: relative;">
+                            <i class="bi bi-search input-icon"></i>
+                            <input type="text" class="pharmacy-input" id="supplierSearch" placeholder="Search supplier by name/phone..." autocomplete="off">
+                            <div class="autocomplete-dropdown" id="supplierDropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2" style="margin-top: 6px;">
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Ref Invoice No <span style="color:var(--danger-500)">*</span></label>
+                        <input type="text" class="pharmacy-input" id="supplierInvoiceNo" placeholder="Ref invoice no">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-custom">Ref Date <span style="color:var(--danger-500)">*</span></label>
+                        <input type="date" class="pharmacy-input" id="purchaseRefDate">
+                    </div>
+                    <div class="col-md-2" style="display:flex; align-items:end; justify-content:flex-end;">
+                        <button class="btn-plus-square" id="toggleNewSupplierForm" type="button" onclick="toggleNewSupplierForm()" title="Add New Supplier">
+                            <span class="plus-icon">+</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="inline-form" id="newSupplierForm" style="display:none; margin-top: 10px;">
+                    <div class="inline-form-header">
+                        <div class="inline-form-title">
+                            <i class="bi bi-person-plus-fill"></i> New Supplier
+                        </div>
+                        <button class="btn-ghost" type="button" onclick="toggleNewSupplierForm()">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-7">
+                            <label class="form-label-custom">Supplier Name <span style="color:var(--danger-500)">*</span></label>
+                            <input type="text" class="pharmacy-input" id="newSupplierName" placeholder="Supplier name">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label-custom">Phone <span style="color:var(--danger-500)">*</span></label>
+                            <input type="text" class="pharmacy-input" id="newSupplierPhone" placeholder="Phone no" maxlength="20">
+                        </div>
+                        <div class="col-12" style="margin-top: 8px;">
+                            <button class="btn-primary-pharmacy btn-supplier-save-green" type="button" onclick="createNewSupplier()">
+                                <i class="bi bi-check-lg"></i> Save Supplier
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bill-summary" id="purchaseSummary" style="margin-top: 12px;">
+            <div class="bill-summary-title">
+                <i class="bi bi-receipt"></i> Summary
+            </div>
+
+            <div class="bill-row">
+                <span class="label">Taxable Amt</span>
+                <span class="value" id="purchaseSubtotal">₹ 0.00</span>
+            </div>
+            <div class="bill-row">
+                <span class="label">Tax Amt</span>
+                <span class="value" id="purchaseTax">₹ 0.00</span>
+            </div>
+            <div class="bill-row">
+                <span class="label">Additional Discount</span>
+                <span class="value">₹ <input type="number" class="additional-discount-input" id="purchaseAdditionalDiscount" value="0" min="0" step="0.01"></span>
+            </div>
+            <div class="bill-row" id="purchaseRoundOffRow">
+                <span class="label">Round-off</span>
+                <span class="value">₹ <input type="number" class="additional-discount-input" id="purchaseRoundOff" value="0" step="0.01"></span>
+            </div>
+            <hr class="bill-divider">
+            <div class="bill-row grand-total">
+                <span class="label">Grand Total</span>
+                <span class="value" id="purchaseGrandTotal">₹ 0.00</span>
+            </div>
+
+            <hr class="bill-divider">
+
+            <label class="form-label-custom" style="margin-bottom: 10px;">Payment</label>
+            <div style="margin-top: 8px;">
+                <label class="form-label-custom">Credit Amount</label>
+                <input type="text" class="pharmacy-input" id="purchaseCreditAmount" value="₹ 0.00" readonly>
+            </div>
+
+            <div style="margin-top: 8px; font-size: 0.82rem; color: var(--gray-500);">
+                Balance Due: <strong id="purchaseBalanceDue" style="color: var(--primary-600);">₹ 0.00</strong>
+            </div>
+
+            <div class="bill-summary-actions" style="margin-top: 12px; display:flex; gap: 10px;">
+                <button type="button" class="btn-success-pharmacy" id="savePurchaseBtn" onclick="savePurchase()" style="flex:1; width:100%;">
+                    <i class="bi bi-check-circle"></i> Save Purchase
+                </button>
+                <button type="button" class="btn-ghost" id="resetPurchaseBtn" style="color: var(--gray-400); flex:1;" onclick="resetPurchase()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    window.__prefetchStocks = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model?.PrefetchedStocks ?? new List<Rxnxt.Web.ViewModels.StockSearchItemViewModel>(),
+        new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        }));
+</script>
+<script src="~/js/pharmacy-purchase.js"></script>
+}

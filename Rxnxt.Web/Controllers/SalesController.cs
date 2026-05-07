@@ -162,6 +162,7 @@ namespace Rxnxt.Web.Controllers
 
         [HttpGet]
         public async Task<IActionResult> AdvancedBatchSearch(
+            
             string? batchNumber,
             string? medicineName,
             string? composition,
