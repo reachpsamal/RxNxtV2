@@ -198,6 +198,12 @@ let isSyncingSplit = false;
 let lastBatchQuickAdd = { key: null, at: 0 };
 let inFlightBatchAdds = new Map();
 
+let medicineSuggestions = [];
+let activeMedicineIndex = -1;
+
+let batchSuggestions = [];
+let activeBatchIndex = -1;
+
 const MVC_BASE = '/Sales';
 
 const PREFETCH_STOCKS = Array.isArray(window.__prefetchStocks) ? window.__prefetchStocks : [];
@@ -573,6 +579,8 @@ function fetchBatchSearchResults(q, onDone) {
     const query = (q || '').trim();
     if (query.length < 2) {
         $('#batchDropdown').removeClass('show').empty();
+        batchSuggestions = [];
+        activeBatchIndex = -1;
         onDone([]);
         return;
     }
@@ -581,6 +589,9 @@ function fetchBatchSearchResults(q, onDone) {
         .filter(s => (s?.batchNumber || '').toString().toLowerCase().includes(query.toLowerCase()))
         .sort((a, b) => String(a?.batchNumber || '').localeCompare(String(b?.batchNumber || ''), 'en', { sensitivity: 'base' }))
         .slice(0, 20);
+
+    batchSuggestions = results;
+    activeBatchIndex = results.length ? 0 : -1;
 
     renderBatchDropdown(results);
     onDone(results.map(r => ({ productId: r.productId, batchNumber: r.batchNumber })));
@@ -601,7 +612,7 @@ function renderBatchDropdown(data) {
         return;
     }
 
-    const html = items.map(b => {
+    const html = items.map((b, idx) => {
         const isExpired = !!b.isExpired;
         const isNearExpiry = !!b.isNearExpiry;
         const expiryClass = isExpired ? 'badge-expired' : (isNearExpiry ? 'badge-expiry-warning' : 'badge-stock');
@@ -611,8 +622,10 @@ function renderBatchDropdown(data) {
             ? exp.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
             : '-';
 
+        const activeClass = idx === activeBatchIndex ? 'active' : '';
+
         return `
-            <div class="autocomplete-item" data-product-id="${b.productId}" data-batch-number="${String(b.batchNumber || '')}" onclick="addFromBatchSelection('${b.productId}', '${String(b.batchNumber || '').replace(/'/g, "\\'")}')">
+            <div class="autocomplete-item ${activeClass}" data-index="${idx}" data-product-id="${b.productId}" data-batch-number="${String(b.batchNumber || '')}" onclick="addFromBatchSelection('${b.productId}', '${String(b.batchNumber || '').replace(/'/g, "\\'")}')">
                 <div class="item-name">${String(b.productName || '')}</div>
                 <div class="item-detail">
                     Batch: <strong>${String(b.batchNumber || '')}</strong> &middot;
@@ -652,10 +665,40 @@ function addFromBatchSelection(productId, batchNumber) {
 }
 
 // ============ MEDICINE SEARCH (TAB B) ============
+function renderMedicineDropdown(items) {
+    const dropdown = $('#medicineDropdown');
+    const results = Array.isArray(items) ? items : [];
+    if (!results.length) {
+        dropdown
+            .html('<div class="autocomplete-no-results"><i class="bi bi-capsule"></i> No medicine found</div>')
+            .addClass('show');
+        return;
+    }
+
+    const html = results.map((m, idx) => {
+        const manufacturer = (m.manufacturer || '').trim();
+        const manufacturerPrefix = manufacturer ? `${manufacturer} · ` : '';
+        const activeClass = idx === activeMedicineIndex ? 'active' : '';
+
+        return `
+            <div class="autocomplete-item ${activeClass}" data-index="${idx}" onclick="addFromDirectSelection('${m.productId}', '${String(m.batchNumber || '').replace(/'/g, "\\'")}')">
+                <div class="item-name">${String(m.productName || '')}</div>
+                <div class="item-detail">
+                    ${manufacturerPrefix}Batch: <strong>${String(m.batchNumber || '')}</strong> &middot; Stock: ${formatNumber(m.availableQty)} ${String(m.uomName || '')}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    dropdown.html(html).addClass('show');
+}
+
 $('#medicineSearch').on('input', debounce(function () {
     const q = $(this).val().trim();
     if (q.length < 2) {
         $('#medicineDropdown').removeClass('show').empty();
+        medicineSuggestions = [];
+        activeMedicineIndex = -1;
         return;
     }
     const query = q.toLowerCase();
@@ -668,29 +711,82 @@ $('#medicineSearch').on('input', debounce(function () {
         })
         .slice(0, 20);
 
+    medicineSuggestions = results;
+    activeMedicineIndex = results.length ? 0 : -1;
+    renderMedicineDropdown(results);
+}));
+
+$('#medicineSearch').on('keydown', function (e) {
     const dropdown = $('#medicineDropdown');
-    if (!results.length) {
-        dropdown
-            .html('<div class="autocomplete-no-results"><i class="bi bi-capsule"></i> No medicine found</div>')
-            .addClass('show');
+    if (!dropdown.hasClass('show') || !Array.isArray(medicineSuggestions) || !medicineSuggestions.length) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeMedicineIndex = activeMedicineIndex < 0 ? 0 : (activeMedicineIndex + 1) % medicineSuggestions.length;
+        renderMedicineDropdown(medicineSuggestions);
         return;
     }
 
-    const html = results.map(m => {
-        const manufacturer = (m.manufacturer || '').trim();
-        const manufacturerPrefix = manufacturer ? `${manufacturer} · ` : '';
-        return `
-            <div class="autocomplete-item" onclick="addFromDirectSelection('${m.productId}', '${String(m.batchNumber || '').replace(/'/g, "\\'")}')">
-                <div class="item-name">${String(m.productName || '')}</div>
-                <div class="item-detail">
-                    ${manufacturerPrefix}Batch: <strong>${String(m.batchNumber || '')}</strong> &middot; Stock: ${formatNumber(m.availableQty)} ${String(m.uomName || '')}
-                </div>
-            </div>
-        `;
-    }).join('');
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeMedicineIndex = activeMedicineIndex < 0
+            ? (medicineSuggestions.length - 1)
+            : (activeMedicineIndex - 1 + medicineSuggestions.length) % medicineSuggestions.length;
+        renderMedicineDropdown(medicineSuggestions);
+        return;
+    }
 
-    dropdown.html(html).addClass('show');
-}));
+    if (e.key === 'Enter') {
+        if (activeMedicineIndex < 0 || activeMedicineIndex >= medicineSuggestions.length) return;
+        e.preventDefault();
+        const m = medicineSuggestions[activeMedicineIndex];
+        if (!m) return;
+        addFromDirectSelection(m.productId, m.batchNumber);
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        dropdown.removeClass('show').empty();
+        return;
+    }
+});
+
+$('#batchSearch').on('keydown', function (e) {
+    const dropdown = $('#batchDropdown');
+    if (!dropdown.hasClass('show') || !Array.isArray(batchSuggestions) || !batchSuggestions.length) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeBatchIndex = activeBatchIndex < 0 ? 0 : (activeBatchIndex + 1) % batchSuggestions.length;
+        renderBatchDropdown(batchSuggestions);
+        return;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeBatchIndex = activeBatchIndex < 0
+            ? (batchSuggestions.length - 1)
+            : (activeBatchIndex - 1 + batchSuggestions.length) % batchSuggestions.length;
+        renderBatchDropdown(batchSuggestions);
+        return;
+    }
+
+    if (e.key === 'Enter') {
+        if (activeBatchIndex < 0 || activeBatchIndex >= batchSuggestions.length) return;
+        e.preventDefault();
+        const b = batchSuggestions[activeBatchIndex];
+        if (!b) return;
+        addFromBatchSelection(b.productId, b.batchNumber);
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        dropdown.removeClass('show').empty();
+        return;
+    }
+});
 
 // ============ CART MANAGEMENT ============
 function addToCart() {

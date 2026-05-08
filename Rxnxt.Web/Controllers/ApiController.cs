@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
+using System.Text.Json;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
@@ -137,8 +139,91 @@ namespace Rxnxt.Web.Controllers
             if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
                 return Ok(new List<SupplierSearchResult>());
 
-            var results = await _supplierRepo.SearchAsync(q);
+            var term = q.Trim();
+            var lower = term.ToLowerInvariant();
+
+            var results = await _db.SupplierMasters
+                .AsNoTracking()
+                .Where(s => s.SupplierName != null && s.SupplierName.ToLower().Contains(lower))
+                .OrderBy(s => s.SupplierName)
+                .Take(20)
+                .Select(s => new
+                {
+                    id = (int?)null,
+                    name = s.SupplierName,
+                    phone = s.MobileNumber,
+                    masterUniqueId = s.UniqueID
+                })
+                .ToListAsync();
+
             return Ok(results);
+        }
+
+        [HttpPost("suppliers/from-master")]
+        public async Task<IActionResult> CreateOrGetSupplierFromMaster([FromBody] JsonElement request)
+        {
+            try
+            {
+                string masterId = string.Empty;
+                if (request.ValueKind == JsonValueKind.Object)
+                {
+                    if (request.TryGetProperty("masterUniqueId", out var v1) && v1.ValueKind == JsonValueKind.String)
+                        masterId = v1.GetString() ?? string.Empty;
+                    else if (request.TryGetProperty("MasterUniqueId", out var v2) && v2.ValueKind == JsonValueKind.String)
+                        masterId = v2.GetString() ?? string.Empty;
+                }
+
+                masterId = (masterId ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(masterId))
+                    return BadRequest(new { message = "MasterUniqueId is required" });
+
+                var master = await _db.SupplierMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.UniqueID == masterId);
+
+                if (master == null)
+                    return NotFound(new { message = "Supplier not found" });
+
+                var name = (master.SupplierName ?? string.Empty).Trim();
+                var phone = string.IsNullOrWhiteSpace(master.MobileNumber) ? null : master.MobileNumber.Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    return BadRequest(new { message = "Supplier name is required" });
+
+                var lowerName = name.ToLowerInvariant();
+                var existing = await _db.Suppliers
+                    .FirstOrDefaultAsync(s => s.Name != null && s.Name.ToLower() == lowerName && (phone == null || s.Phone == phone));
+
+                if (existing != null)
+                {
+                    return Ok(new
+                    {
+                        id = existing.Id,
+                        name = existing.Name,
+                        phone = existing.Phone,
+                        gstin = existing.Gstin,
+                        address = existing.Address
+                    });
+                }
+
+                var created = await _supplierRepo.CreateAsync(new Supplier
+                {
+                    Name = name,
+                    Phone = phone
+                });
+
+                return Ok(new
+                {
+                    id = created.Id,
+                    name = created.Name,
+                    phone = created.Phone,
+                    gstin = created.Gstin,
+                    address = created.Address
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
         }
 
         [HttpPost("suppliers")]

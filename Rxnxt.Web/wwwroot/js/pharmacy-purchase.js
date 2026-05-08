@@ -4,6 +4,9 @@ let selectedSupplier = null;
 let purchaseEntryProduct = null;
 let purchaseEntryBatchStock = null;
 
+let supplierSuggestions = [];
+let supplierActiveIndex = -1;
+
 let purchaseProductSuggestions = [];
 let purchaseProductActiveIndex = -1;
 
@@ -79,6 +82,31 @@ function setTodayDates() {
     $('#purchaseRefDate').val(s);
 }
 
+function editPurchaseItem(index, key, value) {
+    const it = purchaseItems[index];
+    if (!it) return;
+    it[key] = value;
+}
+
+function commitPurchaseItem(index) {
+    const it = purchaseItems[index];
+    if (!it) return;
+
+    const line = calcLine(it);
+    it.taxable = line.afterDisc;
+    it.discountAmount = line.discAmt;
+    it.taxAmount = line.taxAmt;
+    it.lineTotal = line.total;
+
+    renderPurchaseItems();
+}
+
+function handlePurchaseItemEditKeydown(e, index) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    commitPurchaseItem(index);
+}
+
 function renderPurchaseItems() {
     const hasItems = purchaseItems.length > 0;
     $('#purchaseItemsTable').toggle(hasItems);
@@ -105,12 +133,12 @@ function renderPurchaseItems() {
                         <option value="Tablet" ${it.unit === 'Tablet' ? 'selected' : ''}>Tablet</option>
                     </select>
                 </td>
-                <td><input type="number" class="pharmacy-input" value="${it.qty}" min="0" step="0.01" oninput="updatePurchaseItem(${idx}, 'qty', this.value)" /></td>
-                <td><input type="number" class="pharmacy-input" value="${it.purchaseRate}" min="0" step="0.01" oninput="updatePurchaseItem(${idx}, 'purchaseRate', this.value)" /></td>
-                <td><input type="number" class="pharmacy-input" value="${it.mrp}" min="0" step="0.01" oninput="updatePurchaseItem(${idx}, 'mrp', this.value)" /></td>
-                <td><input type="number" class="pharmacy-input" value="${it.discountPercent}" min="0" step="0.01" oninput="updatePurchaseItem(${idx}, 'discountPercent', this.value)" /></td>
+                <td><input type="number" class="pharmacy-input" value="${it.qty}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'qty', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
+                <td><input type="number" class="pharmacy-input" value="${it.purchaseRate}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'purchaseRate', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
+                <td><input type="number" class="pharmacy-input" value="${it.mrp}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'mrp', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
+                <td><input type="number" class="pharmacy-input" value="${it.discountPercent}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'discountPercent', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
                 <td class="text-right" style="font-variant-numeric: tabular-nums;">${formatAmount(it.discountAmount)}</td>
-                <td><input type="number" class="pharmacy-input" value="${it.gstPercent}" min="0" step="0.01" oninput="updatePurchaseItem(${idx}, 'gstPercent', this.value)" /></td>
+                <td><input type="number" class="pharmacy-input" value="${it.gstPercent}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'gstPercent', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
                 <td class="text-right" style="font-variant-numeric: tabular-nums;">${formatAmount(it.lineTotal)}</td>
                 <td><button class="btn-ghost" type="button" onclick="removePurchaseItem(${idx})" title="Remove"><i class="bi bi-x-lg"></i></button></td>
             </tr>`;
@@ -559,15 +587,54 @@ $(document).on('click', function (e) {
     }
 });
 
+function focusNextPurchaseEntryField(currentId) {
+    const order = [
+        'purchaseEntryQty',
+        'purchaseEntryRate',
+        'purchaseEntryMrp',
+        'purchaseEntryDiscPct',
+        'purchaseEntryGstPct',
+        'purchaseAddItemBtn'
+    ];
+
+    const idx = order.indexOf(currentId);
+    if (idx < 0) return;
+    const nextId = order[Math.min(order.length - 1, idx + 1)];
+
+    if (nextId === 'purchaseAddItemBtn') {
+        $('#purchaseAddItemBtn').focus();
+    } else {
+        $('#' + nextId).focus().select?.();
+    }
+}
+
+$('#purchaseEntryQty, #purchaseEntryRate, #purchaseEntryMrp, #purchaseEntryDiscPct, #purchaseEntryGstPct').on('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+
+    const id = this.id;
+    if (id === 'purchaseEntryGstPct') {
+        $('#purchaseAddItemBtn').trigger('click');
+        return;
+    }
+
+    focusNextPurchaseEntryField(id);
+});
+
 function renderSupplierDropdown(items) {
     const $dd = $('#supplierDropdown');
     if (!items.length) {
         $dd.hide().empty();
+        supplierSuggestions = [];
+        supplierActiveIndex = -1;
         return;
     }
 
-    const html = items.map(s => `
-        <div class="autocomplete-item" onclick='selectSupplier(${JSON.stringify(s).replace(/'/g, "\\'")})'>
+    supplierSuggestions = items;
+    if (supplierActiveIndex < 0 || supplierActiveIndex >= items.length) supplierActiveIndex = 0;
+
+    const html = items.map((s, idx) => `
+        <div class="autocomplete-item ${idx === supplierActiveIndex ? 'active' : ''}" onclick='selectSupplier(${JSON.stringify(s).replace(/'/g, "\\'")})'>
             <div class="item-main">${s.name}</div>
             <div class="item-sub">${s.phone || ''}</div>
         </div>`).join('');
@@ -576,10 +643,80 @@ function renderSupplierDropdown(items) {
 }
 
 window.selectSupplier = function (s) {
-    selectedSupplier = s;
-    $('#supplierSearch').val(s.name);
+    const name = s && s.name ? s.name : '';
+    $('#supplierSearch').val(name);
     $('#supplierDropdown').hide().empty();
+
+    supplierSuggestions = [];
+    supplierActiveIndex = -1;
+
+    // Move user forward immediately; linking can complete asynchronously.
+    $('#supplierInvoiceNo').focus();
+
+    if (s && s.masterUniqueId) {
+        fetch('/api/api/suppliers/from-master', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ masterUniqueId: s.masterUniqueId, MasterUniqueId: s.masterUniqueId })
+        })
+            .then(async r => {
+                const data = await r.json().catch(() => null);
+                if (!r.ok || !data) throw new Error((data && data.message) ? data.message : 'Failed to select supplier');
+                return data;
+            })
+            .then(data => {
+                selectedSupplier = data;
+                $('#supplierSearch').val(data.name || name);
+            })
+            .catch(err => {
+                // If linking fails, keep the supplier name so purchase can still proceed (saved by name).
+                selectedSupplier = null;
+                $('#supplierSearch').val(name);
+                showToast('Supplier selected, but linking failed. It will be saved by name.', 'warning');
+            });
+        return;
+    }
+
+    selectedSupplier = s;
 };
+
+$('#supplierSearch').on('keydown', function (e) {
+    const $dd = $('#supplierDropdown');
+    if (!$dd.is(':visible') || !Array.isArray(supplierSuggestions) || supplierSuggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        supplierActiveIndex = supplierActiveIndex < 0 ? 0 : (supplierActiveIndex + 1) % supplierSuggestions.length;
+        renderSupplierDropdown(supplierSuggestions);
+        return;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        supplierActiveIndex = supplierActiveIndex < 0
+            ? (supplierSuggestions.length - 1)
+            : (supplierActiveIndex - 1 + supplierSuggestions.length) % supplierSuggestions.length;
+        renderSupplierDropdown(supplierSuggestions);
+        return;
+    }
+
+    if (e.key === 'Enter') {
+        if (supplierActiveIndex < 0 || supplierActiveIndex >= supplierSuggestions.length) return;
+        e.preventDefault();
+        const s = supplierSuggestions[supplierActiveIndex];
+        if (!s) return;
+        window.selectSupplier(s);
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        $dd.hide().empty();
+        supplierSuggestions = [];
+        supplierActiveIndex = -1;
+        return;
+    }
+});
 
 function toggleNewSupplierForm() {
     const $form = $('#newSupplierForm');

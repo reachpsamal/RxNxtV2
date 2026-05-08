@@ -117,6 +117,59 @@
   },
   {
     "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "GetProductStockBatches",
+    "RelativePath": "api/Api/product-stocks/batches",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "productId",
+        "Type": "System.Guid",
+        "IsRequired": false
+      },
+      {
+        "Name": "q",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "SearchProducts",
+    "RelativePath": "api/Api/products/search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "q",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "CompletePurchase",
+    "RelativePath": "api/Api/purchases/complete",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "Rxnxt.Business.DTOs.CompletePurchaseRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
     "Method": "GetSale",
     "RelativePath": "api/Api/sales/{id}",
     "HttpMethod": "GET",
@@ -194,6 +247,54 @@
       },
       {
         "Name": "batchNumber",
+        "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "CreateSupplier",
+    "RelativePath": "api/Api/suppliers",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "supplier",
+        "Type": "Rxnxt.Domain.Models.Supplier",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "CreateOrGetSupplierFromMaster",
+    "RelativePath": "api/Api/suppliers/from-master",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "System.Text.Json.JsonElement",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Rxnxt.Web.Controllers.ApiController",
+    "Method": "SearchSuppliers",
+    "RelativePath": "api/Api/suppliers/search",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "q",
         "Type": "System.String",
         "IsRequired": false
       }

@@ -30,6 +30,8 @@ namespace Rxnxt.Business.Data
         public DbSet<UomMasterRow> UomMasters { get; set; }
         public DbSet<CustomerMasterRow> CustomerMasters { get; set; }
 
+        public DbSet<SupplierMasterRow> SupplierMasters { get; set; }
+
         public DbSet<ProductStockRow> ProductStocks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -47,6 +49,7 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<UomMasterRow>().ToTable("UOMMaster");
             modelBuilder.Entity<CustomerMasterRow>().ToTable("CustomerMaster");
             modelBuilder.Entity<ProductStockRow>().ToTable("ProductStock");
+            modelBuilder.Entity<SupplierMasterRow>().ToTable("SupplierMaster");
 
             modelBuilder.Entity<ProductStockRow>(entity =>
             {
