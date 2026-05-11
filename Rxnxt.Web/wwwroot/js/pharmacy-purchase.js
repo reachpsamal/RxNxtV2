@@ -24,10 +24,29 @@ function parseGstPercentFromTaxName(taxName) {
 function mapUomNameToUnit(uomName) {
     const s = (uomName || '').toString().trim().toLowerCase();
     if (!s) return null;
-    if (s.includes('pack')) return 'Pack';
-    if (s.includes('strip')) return 'Strip';
-    if (s.includes('tab')) return 'Tablet';
+
+    // Purchase Unit dropdown supports only STRIP and PCS
+    if (s.includes('strip') || s === 'str' || s === 'stp') return 'STRIP';
+    if (s.includes('pcs') || s.includes('piece') || s.includes('unit')) return 'PCS';
+
+    // Treat tablet/capsule style UOMs as PCS
+    if (s.includes('tab') || s.includes('tablet') || s === 'tb' || s === 'tbl' || s === 'tabs') return 'PCS';
+    if (s.includes('cap') || s.includes('capsule')) return 'PCS';
+
+    // Pack/box-like UOMs: choose STRIP as default representation in UI
+    if (s.includes('pack') || s === 'pk' || s === 'pkt' || s.includes('packet') || s.includes('box')) return 'STRIP';
     return null;
+}
+
+function normalizePurchaseUnit(unit) {
+    const s = (unit || '').toString().trim().toLowerCase();
+    if (!s) return '';
+    if (s === 'strip' || s === 'str' || s === 'stp' || s === 'STRIP'.toLowerCase()) return 'STRIP';
+    if (s === 'pcs' || s === 'piece' || s === 'unit') return 'PCS';
+    if (s === 'tablet' || s === 'tab' || s === 'tabs' || s === 'tbl' || s === 'tb') return 'PCS';
+    if (s === 'capsule' || s === 'cap') return 'PCS';
+    if (s === 'pack') return 'STRIP';
+    return '';
 }
 
 function showToast(message, type = 'info') {
@@ -117,6 +136,7 @@ function renderPurchaseItems() {
     $body.empty();
 
     purchaseItems.forEach((it, idx) => {
+        const displayUnit = normalizePurchaseUnit(it.unit) || 'STRIP';
         const row = `
             <tr>
                 <td>${idx + 1}</td>
@@ -128,9 +148,8 @@ function renderPurchaseItems() {
                 <td><input type="date" class="pharmacy-input" value="${it.expiryDate || ''}" oninput="updatePurchaseItem(${idx}, 'expiryDate', this.value)" /></td>
                 <td>
                     <select class="pharmacy-input" onchange="updatePurchaseItem(${idx}, 'unit', this.value)">
-                        <option value="Pack" ${it.unit === 'Pack' ? 'selected' : ''}>Pack</option>
-                        <option value="Strip" ${it.unit === 'Strip' ? 'selected' : ''}>Strip</option>
-                        <option value="Tablet" ${it.unit === 'Tablet' ? 'selected' : ''}>Tablet</option>
+                        <option value="STRIP" ${displayUnit === 'STRIP' ? 'selected' : ''}>STRIP</option>
+                        <option value="PCS" ${displayUnit === 'PCS' ? 'selected' : ''}>PCS</option>
                     </select>
                 </td>
                 <td><input type="number" class="pharmacy-input" value="${it.qty}" min="0" step="0.01" oninput="editPurchaseItem(${idx}, 'qty', this.value)" onblur="commitPurchaseItem(${idx})" onkeydown="handlePurchaseItemEditKeydown(event, ${idx})" /></td>
@@ -187,6 +206,9 @@ function removePurchaseItem(index) {
 }
 
 function clearAllPurchaseItems() {
+    if (!purchaseItems || purchaseItems.length === 0) return;
+    const ok = window.confirm('Clear all purchase items?');
+    if (!ok) return;
     purchaseItems = [];
     renderPurchaseItems();
 }
@@ -271,7 +293,7 @@ function clearPurchaseEntry() {
     $('#purchaseProductDropdown').hide().empty();
     $('#purchaseBatchSearch').prop('disabled', true).val('');
     $('#purchaseBatchDropdown').hide().empty();
-    $('#purchaseUnit').prop('disabled', true).val('Strip');
+    $('#purchaseUnit').prop('disabled', true).val('STRIP');
     $('#purchaseEntryQty').prop('disabled', true).val('');
     $('#purchaseEntryRate').prop('disabled', true).val('');
     $('#purchaseEntryMrp').prop('disabled', true).val('');
@@ -357,6 +379,9 @@ function setPurchaseBatchActiveIndex(nextIndex) {
 window.selectPurchaseBatch = async function (b) {
     if (!purchaseEntryProduct) return;
 
+    // Always default Unit so it is visible even if API auto-fill fails or has no uomName
+    $('#purchaseUnit').val('STRIP');
+
     if (b && b.__create) {
         purchaseEntryBatchStock = null;
         $('#purchaseBatchSearch').val(b.batchNumber || '');
@@ -377,10 +402,12 @@ window.selectPurchaseBatch = async function (b) {
         if (res.ok) {
             const data = await res.json().catch(() => null);
             if (data) {
-                const unit = mapUomNameToUnit(data.uomName);
+                const uomName = data.uomName || data.UomName;
+                const unit = mapUomNameToUnit(uomName);
                 if (unit) $('#purchaseUnit').val(unit);
 
-                const gstPct = parseGstPercentFromTaxName(data.taxName);
+                const taxName = data.taxName || data.TaxName;
+                const gstPct = parseGstPercentFromTaxName(taxName);
                 $('#purchaseEntryGstPct').val(gstPct);
             }
         }
@@ -477,12 +504,25 @@ window.addPurchaseEntryItem = function () {
     }
 
     const rate = parseFloat($('#purchaseEntryRate').val()) || 0;
+    if (rate <= 0) {
+        showToast('Rate is required', 'warning');
+        $('#purchaseEntryRate').focus();
+        return;
+    }
+
     const mrp = parseFloat($('#purchaseEntryMrp').val()) || 0;
+    if (mrp <= 0) {
+        showToast('MRP is required', 'warning');
+        $('#purchaseEntryMrp').focus();
+        return;
+    }
+
     const discPct = Math.max(0, parseFloat($('#purchaseEntryDiscPct').val()) || 0);
     const gstPct = Math.max(0, parseFloat($('#purchaseEntryGstPct').val()) || 0);
 
     const it = {
         productId: purchaseEntryProduct.productId,
+        productUniqueId: purchaseEntryProduct.productUniqueId || null,
         productName: purchaseEntryProduct.productName,
         manufacturer: purchaseEntryProduct.manufacturer,
         batchNumber: batchNumber,
@@ -653,31 +693,11 @@ window.selectSupplier = function (s) {
     // Move user forward immediately; linking can complete asynchronously.
     $('#supplierInvoiceNo').focus();
 
-    if (s && s.masterUniqueId) {
-        fetch('/api/api/suppliers/from-master', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ masterUniqueId: s.masterUniqueId, MasterUniqueId: s.masterUniqueId })
-        })
-            .then(async r => {
-                const data = await r.json().catch(() => null);
-                if (!r.ok || !data) throw new Error((data && data.message) ? data.message : 'Failed to select supplier');
-                return data;
-            })
-            .then(data => {
-                selectedSupplier = data;
-                $('#supplierSearch').val(data.name || name);
-            })
-            .catch(err => {
-                // If linking fails, keep the supplier name so purchase can still proceed (saved by name).
-                selectedSupplier = null;
-                $('#supplierSearch').val(name);
-                showToast('Supplier selected, but linking failed. It will be saved by name.', 'warning');
-            });
-        return;
-    }
-
-    selectedSupplier = s;
+    // App database does not have a Suppliers table in this environment.
+    // Save by supplier name only.
+    selectedSupplier = (s && s.masterUniqueId)
+        ? { masterUniqueId: s.masterUniqueId, name }
+        : null;
 };
 
 $('#supplierSearch').on('keydown', function (e) {
@@ -853,6 +873,7 @@ async function savePurchase() {
 
     const payload = {
         supplierId: selectedSupplier ? selectedSupplier.id : null,
+        supplierMasterUniqueId: selectedSupplier ? selectedSupplier.masterUniqueId : null,
         supplierName: selectedSupplier ? selectedSupplier.name : supplierName,
         supplierInvoiceNo: supplierInvoiceNo,
         invoiceDate: new Date().toISOString(),
@@ -862,9 +883,11 @@ async function savePurchase() {
         roundOff: parseFloat($('#purchaseRoundOff').val()) || 0,
         items: purchaseItems.map(it => ({
             productId: it.productId,
+            productUniqueId: it.productUniqueId || null,
             productName: it.productName,
             batchNumber: (it.batchNumber || '').trim() || null,
             expiryDate: it.expiryDate ? new Date(it.expiryDate).toISOString() : null,
+            unit: it.unit || null,
             qty: parseFloat(it.qty) || 0,
             purchaseRate: parseFloat(it.purchaseRate) || 0,
             mrp: parseFloat(it.mrp) || 0,

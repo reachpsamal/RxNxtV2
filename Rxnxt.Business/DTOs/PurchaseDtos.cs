@@ -15,6 +15,7 @@ namespace Rxnxt.Business.DTOs
     public sealed class CompletePurchaseRequest
     {
         public int? SupplierId { get; set; }
+        public string? SupplierMasterUniqueId { get; set; }
         public string SupplierName { get; set; } = string.Empty;
         public string SupplierInvoiceNo { get; set; } = string.Empty;
         public DateTime InvoiceDate { get; set; } = DateTime.Today;
@@ -31,9 +32,12 @@ namespace Rxnxt.Business.DTOs
     public sealed class PurchaseItemRequest
     {
         public Guid ProductId { get; set; }
+        public string? ProductUniqueId { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public string? BatchNumber { get; set; }
         public DateTime? ExpiryDate { get; set; }
+
+        public string? Unit { get; set; }
 
         public decimal Qty { get; set; }
         public decimal PurchaseRate { get; set; }

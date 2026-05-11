@@ -72,7 +72,7 @@ namespace Rxnxt.Web.Controllers
                 {
                     var ok = Guid.TryParse(p.UniqueID, out var guid);
                     if (!ok) return null;
-                    return new { productId = guid, productName = p.ProductName ?? string.Empty };
+                    return new { productId = guid, productUniqueId = p.UniqueID, productName = p.ProductName ?? string.Empty };
                 })
                 .Where(x => x != null)
                 .ToList();

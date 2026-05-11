@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
 using Rxnxt.Domain.Models;
+using System.Data;
 
 namespace Rxnxt.Business.Implementations
 {
@@ -26,27 +28,13 @@ namespace Rxnxt.Business.Implementations
                 if (string.IsNullOrWhiteSpace(supplierInvoiceNo))
                     return new PurchaseResult { Success = false, Message = "Supplier Invoice No is required" };
 
-                Supplier? supplier = null;
-                if (request.SupplierId.HasValue)
-                {
-                    supplier = await _context.Suppliers.FirstOrDefaultAsync(s => s.Id == request.SupplierId.Value);
-                    if (supplier == null)
-                        return new PurchaseResult { Success = false, Message = "Supplier not found" };
-                }
-                else
-                {
-                    var name = (request.SupplierName ?? string.Empty).Trim();
-                    if (string.IsNullOrWhiteSpace(name))
-                        return new PurchaseResult { Success = false, Message = "Supplier is required" };
+                var supplierMasterUniqueId = (request.SupplierMasterUniqueId ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(supplierMasterUniqueId))
+                    return new PurchaseResult { Success = false, Message = "Supplier is required" };
 
-                    supplier = new Supplier { Name = name, CreatedDate = DateTime.Now };
-                    _context.Suppliers.Add(supplier);
-                    await _context.SaveChangesAsync();
-                }
-
-                var alreadyExists = await _context.Purchases.AsNoTracking().AnyAsync(p => p.SupplierId == supplier.Id && p.SupplierInvoiceNo == supplierInvoiceNo);
-                if (alreadyExists)
-                    return new PurchaseResult { Success = false, Message = "This Supplier Invoice No already exists for this supplier" };
+                var supplierExists = await _context.SupplierMasters.AsNoTracking().AnyAsync(s => s.UniqueID == supplierMasterUniqueId);
+                if (!supplierExists)
+                    return new PurchaseResult { Success = false, Message = "Supplier not found" };
 
                 decimal subtotal = 0m;
                 decimal discount = 0m;
@@ -55,25 +43,76 @@ namespace Rxnxt.Business.Implementations
                 if (request.RefDate == default)
                     return new PurchaseResult { Success = false, Message = "Ref Date is required" };
 
-                var purchase = new Purchase
+                using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+                static string NormalizeUnit(string? u)
                 {
-                    SupplierId = supplier.Id,
-                    SupplierInvoiceNo = supplierInvoiceNo,
-                    InvoiceDate = request.InvoiceDate.Date,
+                    var s = (u ?? string.Empty).Trim().ToUpperInvariant();
+                    if (s == "PCS") return "PCS";
+                    if (s == "STRIP") return "STRIP";
+
+                    if (s == "TABLET" || s == "TAB" || s == "TABS" || s == "TB" || s == "TBL") return "PCS";
+                    if (s == "CAP" || s == "CAPS" || s == "CAPSULE" || s == "CAPSULES") return "PCS";
+                    if (s == "PACK" || s == "PK" || s == "PKT" || s == "BOX") return "STRIP";
+                    if (s == "STR" || s == "STP") return "STRIP";
+                    if (s == "UNIT" || s == "PIECE" || s == "PIECES") return "PCS";
+
+                    return "STRIP";
+                }
+
+                var grnDate = DateTime.Now;
+                var year = grnDate.Year;
+                var yearStart = new DateTime(year, 1, 1);
+                var yearEnd = yearStart.AddYears(1);
+
+                var lastForYear = await _context.GrnHeaders
+                    .AsNoTracking()
+                    .Where(h => h.GRNDate >= yearStart && h.GRNDate < yearEnd && h.GRNNo.StartsWith("PUR-"))
+                    .OrderByDescending(h => h.ID)
+                    .Select(h => h.GRNNo)
+                    .FirstOrDefaultAsync();
+
+                var nextNo = 1;
+                if (!string.IsNullOrWhiteSpace(lastForYear))
+                {
+                    var parts = lastForYear.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 2 && int.TryParse(parts[1], out var lastN) && lastN > 0)
+                        nextNo = lastN + 1;
+                }
+
+                var grnNo = $"PUR-{nextNo}";
+                var grnUniqueId = Guid.NewGuid().ToString();
+
+                var header = new GrnHeaderRow
+                {
+                    UniqueID = grnUniqueId,
+                    GRNNo = grnNo,
+                    GRNDate = grnDate,
+                    GRNType = "PURCHASE",
+                    SupplierID = supplierMasterUniqueId,
+                    RefNumber = supplierInvoiceNo,
                     RefDate = request.RefDate.Date,
-                    DueDate = request.DueDate?.Date,
-                    CreatedDate = DateTime.Now
+                    ActiveStatus = true,
+                    CreatedBy = "ADMIN",
+                    CreatedDate = grnDate,
+                    TenantId = null
                 };
 
-                using var tx = await _context.Database.BeginTransactionAsync();
-
-                _context.Purchases.Add(purchase);
+                _context.GrnHeaders.Add(header);
                 await _context.SaveChangesAsync();
 
                 foreach (var item in request.Items)
                 {
-                    if (item.ProductId == Guid.Empty)
+                    var productUniqueId = (item.ProductUniqueId ?? string.Empty).Trim();
+                    if (string.IsNullOrWhiteSpace(productUniqueId))
                         return new PurchaseResult { Success = false, Message = "Invalid product" };
+
+                    var productExists = await _context.ProductMasters.AsNoTracking().AnyAsync(p => p.UniqueID == productUniqueId);
+                    if (!productExists)
+                        return new PurchaseResult { Success = false, Message = "Invalid product" };
+
+                    var unitNorm = NormalizeUnit(item.Unit);
+                    var unitId = await ResolveUnitMasterUniqueIdAsync(unitNorm);
 
                     var qty = item.Qty;
                     if (qty <= 0)
@@ -96,31 +135,25 @@ namespace Rxnxt.Business.Implementations
                     discount += lineDisc;
                     tax += lineTax;
 
-                    var cgst = gstPct / 2m;
-                    var sgst = gstPct / 2m;
-
-                    var row = new PurchaseItem
+                    var detail = new GrnDetailRow
                     {
-                        PurchaseId = purchase.Id,
-                        ProductId = item.ProductId,
-                        ProductName = (item.ProductName ?? string.Empty).Trim(),
+                        UniqueID = Guid.NewGuid().ToString(),
+                        GRNID = grnUniqueId,
+                        ProductID = productUniqueId,
                         BatchNumber = string.IsNullOrWhiteSpace(item.BatchNumber) ? null : item.BatchNumber.Trim(),
                         ExpiryDate = item.ExpiryDate?.Date,
+                        UnitID = unitId,
                         Qty = qty,
-                        PurchaseRate = rate,
-                        Mrp = item.Mrp,
-                        DiscountPercent = item.DiscountPercent,
-                        DiscountAmount = lineDisc,
-                        GstPercent = gstPct,
-                        CgstPercent = cgst,
-                        SgstPercent = sgst,
-                        TaxAmount = lineTax,
-                        LineTotal = lineTotal
+                        PurchasePrice = rate,
+                        MRP = item.Mrp,
+                        ItemDiscPerc = item.DiscountPercent,
+                        ItemDiscAmount = lineDisc,
+                        TenantId = null
                     };
 
-                    _context.PurchaseItems.Add(row);
+                    _context.GrnDetails.Add(detail);
 
-                    await UpsertProductStockAsync(item.ProductId.ToString(), row.BatchNumber, row.ExpiryDate, qty);
+                    await UpsertProductStockAsync(productUniqueId, detail.BatchNumber, detail.ExpiryDate, qty);
                 }
 
                 await _context.SaveChangesAsync();
@@ -134,35 +167,12 @@ namespace Rxnxt.Business.Implementations
                 var grand = gross + tax + roundOff;
                 if (grand < 0) grand = 0;
 
-                decimal paid = 0m;
-                if (request.Payments != null && request.Payments.Count > 0)
-                {
-                    foreach (var p in request.Payments)
-                    {
-                        if (p.Amount <= 0) continue;
-                        paid += p.Amount;
-                        _context.PurchasePayments.Add(new PurchasePayment
-                        {
-                            PurchaseId = purchase.Id,
-                            Method = (p.Method ?? "Cash").Trim(),
-                            ReferenceNo = string.IsNullOrWhiteSpace(p.ReferenceNo) ? null : p.ReferenceNo.Trim(),
-                            Amount = p.Amount
-                        });
-                    }
-
-                    await _context.SaveChangesAsync();
-                }
-
-                if (paid > grand) paid = grand;
-                var balance = Math.Max(0, grand - paid);
-
-                purchase.Subtotal = subtotal;
-                purchase.DiscountAmount = discount + additionalDiscount;
-                purchase.TaxAmount = tax;
-                purchase.RoundOff = roundOff;
-                purchase.GrandTotal = grand;
-                purchase.PaidAmount = paid;
-                purchase.BalanceAmount = balance;
+                header.BillAmount = grand;
+                header.TaxAmount = tax;
+                header.DiscountAmount = discount + additionalDiscount;
+                header.TotalBeforeRoundOff = subtotal;
+                header.ExtraLess = additionalDiscount;
+                header.ExtraAdd = roundOff;
 
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -170,9 +180,9 @@ namespace Rxnxt.Business.Implementations
                 return new PurchaseResult
                 {
                     Success = true,
-                    Message = "Purchase saved",
-                    PurchaseId = purchase.Id,
-                    SupplierInvoiceNo = purchase.SupplierInvoiceNo
+                    Message = $"Purchase saved (GRN: {grnNo})",
+                    PurchaseId = null,
+                    SupplierInvoiceNo = supplierInvoiceNo
                 };
             }
             catch (Exception ex)
@@ -180,6 +190,57 @@ namespace Rxnxt.Business.Implementations
                 var inner = ex.InnerException?.Message;
                 var msg = inner == null ? ex.Message : $"{ex.Message} | Inner: {inner}";
                 return new PurchaseResult { Success = false, Message = msg };
+            }
+        }
+
+        private async Task<string?> ResolveUnitMasterUniqueIdAsync(string unitNorm)
+        {
+            if (string.IsNullOrWhiteSpace(unitNorm)) return null;
+
+            var conn = _context.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
+                await conn.OpenAsync();
+
+            var dbTx = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+            string? nameColumn = null;
+            await using (var cmdCols = conn.CreateCommand())
+            {
+                cmdCols.Transaction = dbTx;
+                cmdCols.CommandText = @"SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'UnitMaster'";
+
+                await using var rdr = await cmdCols.ExecuteReaderAsync();
+                var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                while (await rdr.ReadAsync())
+                {
+                    var c = rdr.GetString(0);
+                    if (!string.IsNullOrWhiteSpace(c)) cols.Add(c);
+                }
+
+                var candidates = new[] { "UnitName", "UOMName", "UomName", "Name" };
+                nameColumn = candidates.FirstOrDefault(cols.Contains);
+            }
+
+            if (string.IsNullOrWhiteSpace(nameColumn))
+                return null;
+
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = dbTx;
+                cmd.CommandText = $@"SELECT TOP (1) [UniqueID]
+FROM [dbo].[UnitMaster]
+WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
+
+                var p = cmd.CreateParameter();
+                p.ParameterName = "@u";
+                p.Value = unitNorm.ToUpperInvariant();
+                cmd.Parameters.Add(p);
+
+                var result = await cmd.ExecuteScalarAsync();
+                var s = result == null ? null : Convert.ToString(result);
+                return string.IsNullOrWhiteSpace(s) ? null : s;
             }
         }
 
