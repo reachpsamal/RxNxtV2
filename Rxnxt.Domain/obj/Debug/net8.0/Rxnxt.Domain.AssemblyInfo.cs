@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Rxnxt.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+18ae790bd18d04f2b7b8c3fcea889097cf93c608")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+329b32aea4c8c47e148d97812aeba16d41907dbb")]
 [assembly: System.Reflection.AssemblyProductAttribute("Rxnxt.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Rxnxt.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

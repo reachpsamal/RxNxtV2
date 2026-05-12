@@ -738,6 +738,8 @@ $('#supplierSearch').on('keydown', function (e) {
     }
 });
 
+let lastNewSupplierPrefill = { field: null, value: null };
+
 function toggleNewSupplierForm() {
     const $form = $('#newSupplierForm');
     const isOpen = $form.is(':visible');
@@ -745,11 +747,48 @@ function toggleNewSupplierForm() {
         $form.hide();
         $('#newSupplierName').val('');
         $('#newSupplierPhone').val('');
+        lastNewSupplierPrefill = { field: null, value: null };
         return;
     }
 
     $form.show();
-    $('#newSupplierName').focus();
+
+    const q = ($('#supplierSearch').val() || '').trim();
+    const nameEl = $('#newSupplierName');
+    const phoneEl = $('#newSupplierPhone');
+
+    if (q.length < 2) {
+        // If user cleared the search, start fresh (do not keep previous prefill)
+        nameEl.val('');
+        phoneEl.val('');
+        lastNewSupplierPrefill = { field: null, value: null };
+        nameEl.focus();
+        return;
+    }
+
+    const normalized = q.replace(/[\s\-\+\(\)]/g, '');
+    const isPhone = /^\d{4,}$/.test(normalized);
+
+    if (isPhone) {
+        const canOverwritePhone = !phoneEl.val() || (lastNewSupplierPrefill.field === 'phone' && phoneEl.val() === lastNewSupplierPrefill.value);
+        if (canOverwritePhone) {
+            phoneEl.val(normalized);
+            lastNewSupplierPrefill = { field: 'phone', value: normalized };
+        }
+        if (!nameEl.val()) {
+            nameEl.focus();
+        } else {
+            phoneEl.focus();
+        }
+        return;
+    }
+
+    const canOverwriteName = !nameEl.val() || (lastNewSupplierPrefill.field === 'name' && nameEl.val() === lastNewSupplierPrefill.value);
+    if (canOverwriteName) {
+        nameEl.val(q);
+        lastNewSupplierPrefill = { field: 'name', value: q };
+    }
+    nameEl.focus();
 }
 
 async function createNewSupplier() {
@@ -774,7 +813,10 @@ async function createNewSupplier() {
             return;
         }
 
-        selectedSupplier = data;
+        selectedSupplier = {
+            masterUniqueId: data.masterUniqueId,
+            name: data.name
+        };
         $('#supplierSearch').val(data.name);
         $('#supplierDropdown').hide().empty();
         toggleNewSupplierForm();

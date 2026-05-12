@@ -11,15 +11,5 @@
     "C:\\Users\\Hp\\.nuget\\packages\\microsoft.extensions.options\\8.0.0\\microsoft.extensions.options.8.0.0.nupkg.sha512",
     "C:\\Users\\Hp\\.nuget\\packages\\microsoft.extensions.primitives\\8.0.0\\microsoft.extensions.primitives.8.0.0.nupkg.sha512"
   ],
-  "logs": [
-    {
-      "code": "NU1900",
-      "level": "Warning",
-      "message": "Error occurred while getting package vulnerability data: Unable to load the service index for source https://api.nuget.org/v3/index.json.",
-      "projectPath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
-      "warningLevel": 1,
-      "filePath": "D:\\Rxnxtv2\\RxNxtV2\\Rxnxt.Logging\\Rxnxt.Logging.csproj",
-      "targetGraphs": []
-    }
-  ]
+  "logs": []
 }

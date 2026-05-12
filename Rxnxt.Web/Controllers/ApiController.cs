@@ -227,19 +227,51 @@ namespace Rxnxt.Web.Controllers
         }
 
         [HttpPost("suppliers")]
-        public async Task<IActionResult> CreateSupplier([FromBody] Supplier supplier)
+        public async Task<IActionResult> CreateSupplier([FromBody] SupplierCreateRequest request)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            string name = request?.name;
+            string phone = request?.phone;
 
-            var created = await _supplierRepo.CreateAsync(supplier);
-            return Ok(new SupplierSearchResult
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest(new { message = "Supplier name is required" });
+
+            var normalizedName = name.Trim().ToUpperInvariant();
+
+            // Check if supplier with same name already exists
+            var existing = (await _db.SupplierMasters.ToListAsync())
+                .FirstOrDefault(s => s.SupplierName.Trim().ToUpperInvariant() == normalizedName);
+
+            if (existing != null)
             {
-                Id = created.Id,
-                Name = created.Name,
-                Phone = created.Phone,
-                Gstin = created.Gstin,
-                Address = created.Address
+                return Ok(new
+                {
+                    name = existing.SupplierName,
+                    phone = existing.MobileNumber,
+                    masterUniqueId = existing.UniqueID
+                });
+            }
+
+            // Create new supplier in SupplierMaster
+            var newSupplier = new SupplierMasterRow
+            {
+                UniqueID = Guid.NewGuid().ToString(),
+                SupplierCode = !string.IsNullOrWhiteSpace(phone) ? phone : name.Trim().Substring(0, Math.Min(50, name.Trim().Length)),
+                SupplierName = name.Trim(),
+                MobileNumber = !string.IsNullOrWhiteSpace(phone) ? phone : null,
+                ActiveStatus = true,
+                CreatedBy = "admin",
+                CreatedDate = DateTime.Now,
+                TenantId = null
+            };
+
+            _db.SupplierMasters.Add(newSupplier);
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                name = newSupplier.SupplierName,
+                phone = newSupplier.MobileNumber,
+                masterUniqueId = newSupplier.UniqueID
             });
         }
 

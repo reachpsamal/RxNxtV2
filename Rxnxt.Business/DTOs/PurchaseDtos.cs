@@ -12,6 +12,12 @@ namespace Rxnxt.Business.DTOs
         public string? Address { get; set; }
     }
 
+    public sealed class SupplierCreateRequest
+    {
+        public string name { get; set; } = string.Empty;
+        public string? phone { get; set; }
+    }
+
     public sealed class CompletePurchaseRequest
     {
         public int? SupplierId { get; set; }

@@ -1353,6 +1353,8 @@ function clearAllItems() {
         showToast('Return mode: items cannot be cleared', 'warning');
         return;
     }
+    const ok = window.confirm('Clear all sale items?');
+    if (!ok) return;
     saleItems = [];
     renderSaleItems();
     recalculateBill();

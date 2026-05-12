@@ -838,6 +838,11 @@ D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\Rxnxt.Web.RazorAssemblyInfo.cs
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\Rxnxt.Web.sourcelink.json
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets.build.json
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets.development.json
+D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.Rxnxt.Web.Microsoft.AspNetCore.StaticWebAssets.props
+D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.build.Rxnxt.Web.props
+D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.buildMultiTargeting.Rxnxt.Web.props
+D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.Rxnxt.Web.props
+D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets.pack.json
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\scopedcss\Pages\Shared\_Layout.cshtml.rz.scp.css
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\scopedcss\Views\Shared\_Layout.cshtml.rz.scp.css
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\scopedcss\bundle\Rxnxt.Web.styles.css
@@ -848,8 +853,3 @@ D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\refint\Rxnxt.Web.dll
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\Rxnxt.Web.pdb
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\Rxnxt.Web.genruntimeconfig.cache
 D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\ref\Rxnxt.Web.dll
-D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.Rxnxt.Web.Microsoft.AspNetCore.StaticWebAssets.props
-D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.build.Rxnxt.Web.props
-D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.buildMultiTargeting.Rxnxt.Web.props
-D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets\msbuild.buildTransitive.Rxnxt.Web.props
-D:\Rxnxtv2\RxNxtV2\Rxnxt.Web\obj\Debug\net8.0\staticwebassets.pack.json
