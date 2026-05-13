@@ -1,11 +1,50 @@
-.vs/
+# Build folders
+bin/
+obj/
+
+# User-specific files
 *.user
-*.userosscache
 *.suo
-*.userprefs
-*.rsuser
+*.userosscache
 *.sln.docstates
-*.VC.db
-*.VC.VC.opendb
+
+# Visual Studio
+.vs/
+
+# Rider
+.idea/
+
+# VS Code
 .vscode/
+
+# Logs
 *.log
+
+# Entity Framework
+*.mdf
+*.ldf
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# IIS Express
+/.vs/
+/iisexpress/
+
+# Azure
+*.PublishSettings
+
+# Resharper
+_ReSharper*/
+*.DotSettings.user
+
+# Test Results
+TestResults/
+
+# Node
+node_modules/
+
+# Temp
+temp/
+tmp/
