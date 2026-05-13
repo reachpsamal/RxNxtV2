@@ -1,4 +1,11 @@
+# Build output
+bin/
+obj/
+TestResults/
+
+# Visual Studio / IDE
 .vs/
+.vscode/
 *.user
 *.userosscache
 *.suo
@@ -7,5 +14,19 @@
 *.sln.docstates
 *.VC.db
 *.VC.VC.opendb
-.vscode/
+
+# Logs
 *.log
+
+# Local configuration and secrets
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+.env
+.env.*
+
+# NuGet
+packages/
+*.nupkg
+project.lock.json
+.nuget/
