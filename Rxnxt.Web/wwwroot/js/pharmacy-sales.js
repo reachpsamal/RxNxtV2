@@ -1193,6 +1193,9 @@ function renderSaleItems() {
                 <td>
                     <input type="number" class="item-qty-input" value="${item.quantity}" min="${isReturnMode ? 0 : 1}" ${maxQtyAttr}
                            oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
+
+                    
+
                 </td>
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
                 <td>
@@ -1283,6 +1286,20 @@ function updateItemQuantity(index, value) {
     // Keep additional discount fields aligned with subtotal changes
     syncAdditionalDiscountAmountFromPercent();
     updateSaleItemsSummary();
+
+    //saleItems[index].quantity = qty;
+    //recalculateItem(index);
+
+    //const item = saleItems[index];
+
+    //// Update only changed fields
+    //$(`#discAmt-${index}`).text(formatCurrency(item.discountAmount));
+    //$(`#taxAmt-${index}`).text(formatCurrency(item.taxAmount || 0));
+    //$(`#lineTotal-${index}`).text(formatCurrency(item.total));
+
+    //recalculateBill();
+    //syncAdditionalDiscountAmountFromPercent();
+    //updateSaleItemsSummary();
 }
 
 function updateItemDiscount(index, value) {

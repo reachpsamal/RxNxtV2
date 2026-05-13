@@ -1,57 +1,176 @@
-@model List<Rxnxt.Business.DTOs.StockDto>
+@model Rxnxt.Web.ViewModels.StockReportViewModel
 
 @{
-    ViewData["Title"] = "Stocks";
-    var errorMessage = ViewBag.ErrorMessage as string;
+    ViewData["Title"] = "Stock Report";
+    bool Selected(string value, string current) => string.Equals(value, current, StringComparison.OrdinalIgnoreCase);
 }
 
-<div class="container mt-4">
-    <h2 class="mb-3">Stocks</h2>
+<div class="stock-report-page">
+    <div class="section-card stock-report-header-card">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-boxes"></i>
+                Stock Report
+            </div>
+            <span class="section-badge info">Live DB Stock</span>
+        </div>
+        <div class="section-body">
+            <div class="stock-summary-grid">
+                <div class="stock-summary-tile">
+                    <span class="stock-summary-label">Total Batches</span>
+                    <strong>@Model.TotalBatches</strong>
+                </div>
+                <div class="stock-summary-tile success">
+                    <span class="stock-summary-label">In Stock</span>
+                    <strong>@Model.InStockBatches</strong>
+                </div>
+                <div class="stock-summary-tile warning">
+                    <span class="stock-summary-label">Low Stock</span>
+                    <strong>@Model.LowStockBatches</strong>
+                </div>
+                <div class="stock-summary-tile danger">
+                    <span class="stock-summary-label">Expiry Alerts</span>
+                    <strong>@(Model.NearExpiryBatches + Model.ExpiredBatches)</strong>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    @if (!string.IsNullOrWhiteSpace(errorMessage))
-    {
-        <div class="alert alert-danger" role="alert">
-            @errorMessage
+    <div class="section-card stock-report-filter">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-funnel"></i>
+                Filters
+            </div>
+            <a class="btn-ghost" href="@Url.Action("Index", "Stock")">
+                <i class="bi bi-x-circle"></i> Clear
+            </a>
         </div>
-    }
+        <div class="section-body">
+            <form method="get" asp-action="Index" asp-controller="Stock">
+                <div class="stock-filter-grid">
+                    <div>
+                        <label class="form-label-custom" for="search">Product</label>
+                        <div class="input-group-pharmacy">
+                            <i class="bi bi-search input-icon"></i>
+                            <input class="pharmacy-input" id="search" name="search" value="@Model.Filter.Search" placeholder="Search product or ID">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label-custom" for="batchNumber">Batch</label>
+                        <input class="pharmacy-input" id="batchNumber" name="batchNumber" value="@Model.Filter.BatchNumber" placeholder="Batch number">
+                    </div>
+                    <div>
+                        <label class="form-label-custom" for="manufacturer">Manufacturer</label>
+                        <input class="pharmacy-input" id="manufacturer" name="manufacturer" value="@Model.Filter.Manufacturer" placeholder="Manufacturer">
+                    </div>
+                    <div>
+                        <label class="form-label-custom" for="expiryStatus">Expiry</label>
+                        <select class="pharmacy-input" id="expiryStatus" name="expiryStatus">
+                            <option value="All" selected="@Selected("All", Model.Filter.ExpiryStatus)">All</option>
+                            <option value="Available" selected="@Selected("Available", Model.Filter.ExpiryStatus)">Available</option>
+                            <option value="NearExpiry" selected="@Selected("NearExpiry", Model.Filter.ExpiryStatus)">Near Expiry</option>
+                            <option value="Expired" selected="@Selected("Expired", Model.Filter.ExpiryStatus)">Expired</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom" for="quantityStatus">Quantity</label>
+                        <select class="pharmacy-input" id="quantityStatus" name="quantityStatus">
+                            <option value="All" selected="@Selected("All", Model.Filter.QuantityStatus)">All</option>
+                            <option value="InStock" selected="@Selected("InStock", Model.Filter.QuantityStatus)">In Stock</option>
+                            <option value="LowStock" selected="@Selected("LowStock", Model.Filter.QuantityStatus)">Low Stock</option>
+                            <option value="OutOfStock" selected="@Selected("OutOfStock", Model.Filter.QuantityStatus)">Out of Stock</option>
+                        </select>
+                    </div>
+                    <div class="stock-filter-action">
+                        <button class="btn-primary-pharmacy" type="submit">
+                            <i class="bi bi-search"></i>
+                            Apply
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    @if (Model == null || Model.Count == 0)
-    {
-        <div class="alert alert-warning" role="alert">
-            No Data Found
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-table"></i>
+                Available Stock
+            </div>
+            <span class="section-badge success">@Model.Rows.Count rows</span>
         </div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="table table-bordered table-striped table-hover align-middle">
-                <thead class="table-dark">
-                    <tr>
-                        <th>Product Name</th>
-                        <th>Manufacturer</th>
-                        <th>Batch Number</th>
-                        <th>Expiry Date</th>
-                        <th class="text-end">MRP</th>
-                        <th class="text-end">Available Qty</th>
-                        <th>UOM</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var item in Model)
-                    {
-                        var isExpired = item.ExpiryDate.HasValue && item.ExpiryDate.Value.Date < DateTime.Today;
-                        <tr class="@(isExpired ? "table-danger" : "")">
-                            <td>@item.ProductName</td>
-                            <td>@item.Manufacturer</td>
-                            <td>@item.BatchNumber</td>
-                            <td>@(item.ExpiryDate.HasValue ? item.ExpiryDate.Value.ToString("dd-MM-yyyy") : "")</td>
-                            <td class="text-end">@item.Mrp</td>
-                            <td class="text-end">@item.AvailableQty</td>
-                            <td>@item.UomName</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <div class="section-body">
+            @if (Model.Rows.Count == 0)
+            {
+                <div class="empty-cart stock-empty-state">
+                    <i class="bi bi-inboxes"></i>
+                    <p>No stock found</p>
+                    <span>Change filters or add stock through Purchase Entry.</span>
+                </div>
+            }
+            else
+            {
+                <div class="stock-table-wrap">
+                    <table class="stock-report-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Batch</th>
+                                <th>Expiry</th>
+                                <th>Manufacturer</th>
+                                <th>UOM</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">MRP</th>
+                                <th class="text-right">Purchase</th>
+                                <th class="text-right">Sale</th>
+                                <th>Tax</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Rows)
+                            {
+                                <tr class="@(row.IsExpired ? "stock-row-expired" : row.IsNearExpiry ? "stock-row-warning" : string.Empty)">
+                                    <td>
+                                        <div class="stock-product-name">@row.ProductName</div>
+                                        @* <div class="stock-product-id">@row.ProductId</div> *@
+                                    </td>
+                                    <td>@row.BatchNumber</td>
+                                    <td>
+                                        @(row.ExpiryDate.HasValue ? row.ExpiryDate.Value.ToString("dd-MMM-yyyy") : "")
+                                        @if (row.IsExpired)
+                                        {
+                                            <span class="stock-badge danger">Expired</span>
+                                        }
+                                        else if (row.IsNearExpiry)
+                                        {
+                                            <span class="stock-badge warning">Near</span>
+                                        }
+                                    </td>
+                                    <td>@row.ManufacturerName</td>
+                                    <td>@row.UomName</td>
+                                    <td class="text-right">
+                                        <strong>@row.AvailableQty.ToString("0.##")</strong>
+                                        @if (row.IsOutOfStock)
+                                        {
+                                            <span class="stock-badge danger">Out</span>
+                                        }
+                                        else if (row.IsLowStock)
+                                        {
+                                            <span class="stock-badge warning">Low</span>
+                                        }
+                                    </td>
+                                    <td class="text-right">@row.Mrp.ToString("0.00")</td>
+                                    <td class="text-right">@row.PurchasePrice.ToString("0.00")</td>
+                                    <td class="text-right">@row.SalePrice.ToString("0.00")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(row.TaxName) ? $"{row.TaxPerc:0.##}%" : row.TaxName)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
-    }
+    </div>
 </div>

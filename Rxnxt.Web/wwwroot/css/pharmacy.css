@@ -1496,6 +1496,172 @@ body {
 }
 
 /* ============================== */
+/* STOCK REPORT                   */
+/* ============================== */
+.stock-report-page {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stock-report-header-card .section-body {
+    padding: 10px 12px;
+}
+
+.stock-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.stock-summary-tile {
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-md);
+    background: var(--gray-50);
+    padding: 10px 12px;
+    box-shadow: var(--shadow-sm);
+}
+
+.stock-summary-tile strong {
+    display: block;
+    color: var(--gray-900);
+    font-size: 1.35rem;
+    line-height: 1.2;
+    margin-top: 2px;
+}
+
+.stock-summary-label {
+    display: block;
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.stock-summary-tile.success {
+    background: var(--accent-50);
+    border-color: var(--accent-100);
+}
+
+.stock-summary-tile.warning {
+    background: var(--warning-50);
+    border-color: var(--warning-100);
+}
+
+.stock-summary-tile.danger {
+    background: var(--danger-50);
+    border-color: var(--danger-100);
+}
+
+.stock-filter-grid {
+    display: grid;
+    grid-template-columns: 1.3fr 0.9fr 1fr 0.8fr 0.8fr auto;
+    gap: 10px;
+    align-items: end;
+}
+
+.stock-filter-action {
+    display: flex;
+    align-items: end;
+}
+
+.stock-filter-action .btn-primary-pharmacy {
+    background: #1eaa69;
+    min-height: 38px;
+    padding: 8px 16px;
+    box-shadow: 0 10px 22px rgba(30, 170, 105, 0.18);
+}
+
+.stock-filter-action .btn-primary-pharmacy:hover {
+    background: #17945b;
+    box-shadow: 0 12px 26px rgba(30, 170, 105, 0.28);
+}
+
+.stock-table-wrap {
+    overflow-x: auto;
+}
+
+.stock-report-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.8rem;
+}
+
+.stock-report-table thead th {
+    background: var(--gray-50);
+    border-bottom: 2px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 8px 10px;
+    position: sticky;
+    text-transform: uppercase;
+    top: 0;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.stock-report-table tbody td {
+    border-bottom: 1px solid var(--gray-100);
+    padding: 8px 10px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.stock-report-table tbody tr:hover {
+    background: var(--primary-50);
+}
+
+.stock-row-warning {
+    background: rgba(245, 158, 11, 0.05);
+}
+
+.stock-row-expired {
+    background: rgba(239, 68, 68, 0.06);
+}
+
+.stock-product-name {
+    color: var(--gray-800);
+    font-weight: 800;
+}
+
+.stock-product-id {
+    color: var(--gray-400);
+    font-size: 0.72rem;
+    max-width: 270px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stock-badge {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-left: 6px;
+    padding: 4px 7px;
+    text-transform: uppercase;
+}
+
+.stock-badge.warning {
+    background: var(--warning-100);
+    color: var(--warning-600);
+}
+
+.stock-badge.danger {
+    background: var(--danger-100);
+    color: var(--danger-600);
+}
+
+.stock-empty-state {
+    margin: 8px 0;
+}
+
+/* ============================== */
 /* BATCH INFO CARD               */
 /* ============================== */
 .batch-info-card {
@@ -1875,6 +2041,11 @@ body {
     .header-center {
         display: none;
     }
+
+    .stock-summary-grid,
+    .stock-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -1932,6 +2103,16 @@ body {
 
     .search-filters {
         grid-template-columns: 1fr;
+    }
+
+    .stock-summary-grid,
+    .stock-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stock-filter-action .btn-primary-pharmacy {
+        width: 100%;
+        justify-content: center;
     }
 }
 
