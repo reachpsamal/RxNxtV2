@@ -12,6 +12,7 @@ let isPrefillingEditSale = false;
 let isReturnMode = false;
 
 let originalSaleItemsByKey = null;
+let allowedReturnItemKeys = null;
 let originalSaleAdditionalDiscount = 0;
 
 const productUomOptionsCache = new Map();
@@ -790,6 +791,14 @@ $('#batchSearch').on('keydown', function (e) {
 function addToCart() {
     if (!currentBatchInfo) { showToast('Please select a batch first', 'warning'); return; }
 
+    if (isReturnMode) {
+        const key = `${String(currentBatchInfo.productId || '').trim().toLowerCase()}|${String(currentBatchInfo.batchNumber || '').trim().toLowerCase()}`;
+        if (!allowedReturnItemKeys || !allowedReturnItemKeys.has(key)) {
+            showToast('Only items from the selected sale invoice can be returned', 'error');
+            return;
+        }
+    }
+
     const qty = parseInt($('#addQty').val()) || 0;
     const unitType = selectedUnitType;
 
@@ -864,6 +873,14 @@ function addToCart() {
 
 function addFromAdvancedSearch(productId, batchNumber) {
     const addKey = `${String(productId || '').trim().toLowerCase()}|${String(batchNumber || '').trim().toLowerCase()}`;
+
+    if (isReturnMode) {
+        if (!allowedReturnItemKeys || !allowedReturnItemKeys.has(addKey)) {
+            showToast('Only items from the selected sale invoice can be returned', 'error');
+            return;
+        }
+    }
+
     const now = Date.now();
     const lastInFlightAt = inFlightBatchAdds.get(addKey);
     if (lastInFlightAt && (now - lastInFlightAt) < 1200) {
@@ -1181,8 +1198,7 @@ function renderSaleItems() {
                     </select>`}
                 </td>
                 <td>
-                     <input type="number" class="item-qty-input" value="${item.quantity}" min="${isReturnMode ? 0 : 1}" ${maxQtyAttr}
-           oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
+                     <input type="number" class="item-qty-input" value="${item.quantity}" ${maxQtyAttr} id="qty-${index}">
 
                     
 
@@ -1340,10 +1356,6 @@ function updateItemDiscountLive(index, value) {
 }
 
 function removeItem(index) {
-    if (isReturnMode) {
-        showToast('Return mode: items cannot be removed', 'warning');
-        return;
-    }
     const name = saleItems[index].productName || saleItems[index].medicineName;
     saleItems.splice(index, 1);
     renderSaleItems();
@@ -1477,6 +1489,14 @@ function recalculateBill() {
 $('#additionalDiscountPercent').on('input', debounce(function () {
     syncAdditionalDiscountAmountFromPercent();
     recalculateBill();
+}, 200));
+
+$('#saleItemsBody').on('input', '.item-qty-input', debounce(function () {
+    const id = $(this).attr('id') || '';
+    const match = id.match(/^qty-(\d+)$/);
+    if (match) {
+        updateItemQuantity(parseInt(match[1], 10), this.value);
+    }
 }, 200));
 
 function updatePaymentAmount(grandTotal) {
@@ -1800,6 +1820,7 @@ function startNewSale() {
     editingSaleId = null;
     isReturnMode = false;
     originalSaleItemsByKey = null;
+    allowedReturnItemKeys = null;
     originalSaleAdditionalDiscount = 0;
     window.__lastCompletedSaleId = null;
 
@@ -1981,11 +2002,30 @@ function loadSaleForEdit(saleId) {
                 $('#skipCustomerBtn').show();
             }
 
-            // Items (skip in return mode — only customer details are needed)
+            // Items — always populate original item references for return mode validation
+            {
+                const items = data.items || [];
+                originalSaleItemsByKey = {};
+                allowedReturnItemKeys = new Set();
+                items.forEach(i => {
+                    const qty = parseFloat(i.quantity) || 0;
+                    const price = parseFloat(i.price) || 0;
+                    const originalLineTotal = parseFloat(i.total);
+                    const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
+                    originalSaleItemsByKey[key] = {
+                        qty: qty,
+                        baseQty: qty,
+                        uomName: i.uomName || 'PCS',
+                        saleUomName: i.uomName || 'PCS',
+                        total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
+                    };
+                    allowedReturnItemKeys.add(`${String(i.productId || '').trim().toLowerCase()}|${String(i.batchNumber || '').trim().toLowerCase()}`);
+                });
+            }
+
             if (!isReturnMode) {
                 const items = data.items || [];
                 saleItems = [];
-                originalSaleItemsByKey = {};
                 originalSaleAdditionalDiscount = parseFloat(data.additionalDiscount) || parseFloat(data.additionalDiscountAmount) || 0;
                 items.forEach(i => {
                     const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
@@ -1996,15 +2036,6 @@ function loadSaleForEdit(saleId) {
                     const qty = parseFloat(i.quantity) || 0;
                     const price = parseFloat(i.price) || 0;
                     const originalLineTotal = parseFloat(i.total);
-
-                    const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
-                    originalSaleItemsByKey[key] = {
-                        qty: qty,
-                        baseQty: qty,
-                        uomName: i.uomName || 'PCS',
-                        saleUomName: i.uomName || 'PCS',
-                        total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
-                    };
 
                     const serverDiscPercent = parseFloat(i.discountPercent) || 0;
                     const serverDiscAmount = parseFloat(i.discountAmount) || 0;

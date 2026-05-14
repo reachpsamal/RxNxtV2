@@ -859,24 +859,6 @@ namespace Rxnxt.Business.Implementations
                                 return new SaleResult { Success = false, Message = "Return mode: customer cannot be changed." };
                             }
 
-                            if (header.ExtraLess != request.AdditionalDiscount)
-                            {
-                                return new SaleResult { Success = false, Message = "Return mode: additional discount cannot be changed." };
-                            }
-
-                            var oldKeySet = oldDetails
-                                .Select(d => $"{(d.ProductID ?? string.Empty).Trim().ToLowerInvariant()}|{NormalizeBatch(d.BatchNumber).Trim().ToLowerInvariant()}|{d.ExpiryDate?.Date:yyyyMMdd}")
-                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                            var newKeySet = request.Items
-                                .Select(i => $"{i.ProductId.ToString().Trim().ToLowerInvariant()}|{NormalizeBatch(i.BatchNumber).Trim().ToLowerInvariant()}|{i.ExpiryDate.Date:yyyyMMdd}")
-                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-                            if (!oldKeySet.SetEquals(newKeySet))
-                            {
-                                return new SaleResult { Success = false, Message = "Return mode: items cannot be added/removed/changed." };
-                            }
-
                             // Enforce cash-only refund on return
                             var nonZeroPayments = request.Payments
                                 .Where(p => p != null && p.Amount != 0)
@@ -1188,7 +1170,7 @@ namespace Rxnxt.Business.Implementations
                                     }
                                 }
 
-                                var returnedBaseQty = oldBaseQty - newRequiredBaseQty;
+                                var returnedBaseQty = newRequiredBaseQty;
                                 if (returnedBaseQty <= 0) continue;
 
                                 // Add stock back
