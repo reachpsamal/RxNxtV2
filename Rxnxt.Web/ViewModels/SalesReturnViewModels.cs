@@ -10,11 +10,12 @@ public sealed class SalesReturnFilterViewModel
 public sealed class SalesReturnRowViewModel
 {
     public int Id { get; set; }
-    public string BillNo { get; set; } = string.Empty;
-    public DateTime BillDate { get; set; }
-    public string CustomerID { get; set; } = string.Empty;
-    public decimal? BillAmount { get; set; }
-    public string? SaleId { get; set; }
+    public string InvoiceNumber { get; set; } = string.Empty;
+    public DateTime SaleDate { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerPhone { get; set; }
+    public decimal GrandTotal { get; set; }
+    public string PaymentStatus { get; set; } = string.Empty;
 }
 
 public sealed class SalesReturnViewModel

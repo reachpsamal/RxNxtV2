@@ -19,71 +19,103 @@ public sealed class SalesReturnController : Controller
     {
         _ = cancellationToken;
 
-        var hasSearch = from.HasValue || to.HasValue || !string.IsNullOrWhiteSpace(q);
+        var fromDate = (from ?? DateTime.Today).Date;
+        var toDate = (to ?? DateTime.Today).Date;
 
-        SalesReturnFilterViewModel filter;
-        List<SalesReturnRowViewModel> rows;
-
-        if (!hasSearch)
+        if (toDate < fromDate)
         {
-            filter = new SalesReturnFilterViewModel();
-            rows = new List<SalesReturnRowViewModel>();
+            (fromDate, toDate) = (toDate, fromDate);
         }
-        else
+
+        var toDt = toDate.AddDays(1).AddTicks(-1);
+
+        var headerQuery = _db.SaleHeaders
+            .AsNoTracking()
+            .Where(h => h.BillDate >= fromDate && h.BillDate <= toDt);
+
+        if (!string.IsNullOrWhiteSpace(q))
         {
-            var fromDate = (from ?? DateTime.Today).Date;
-            var toDate = (to ?? DateTime.Today).Date;
+            var term = q.Trim().ToLower();
+            headerQuery = headerQuery.Where(h => h.BillNo.ToLower().Contains(term));
+        }
 
-            if (toDate < fromDate)
-            {
-                (fromDate, toDate) = (toDate, fromDate);
-            }
+        var headers = await headerQuery
+            .OrderByDescending(h => h.BillDate)
+            .ThenByDescending(h => h.ID)
+            .ToListAsync(cancellationToken);
 
-            var toDt = toDate.AddDays(1).AddTicks(-1);
+        // Resolve customer names
+        var customerIdRawValues = headers
+            .Select(h => (h.CustomerID ?? string.Empty).Trim())
+            .Where(cid => !string.IsNullOrWhiteSpace(cid) && cid != "0")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-            var query = _db.SalesReturnHeaders.AsNoTracking();
+        var numericCustomerIds = customerIdRawValues
+            .Select(cid => int.TryParse(cid, out var n) ? (int?)n : null)
+            .Where(n => n.HasValue)
+            .Select(n => n!.Value)
+            .Distinct()
+            .ToList();
 
-            if (from.HasValue || to.HasValue)
-            {
-                query = query.Where(r => r.BillDate >= fromDate && r.BillDate <= toDt);
-            }
-
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                var term = q.Trim().ToLower();
-                query = query.Where(r =>
-                    (r.BillNo != null && r.BillNo.ToLower().Contains(term)) ||
-                    (r.CustomerID != null && r.CustomerID.ToLower().Contains(term)) ||
-                    (r.SaleId != null && r.SaleId.ToLower().Contains(term)) ||
-                    (r.SaleId != null && _db.SaleHeaders.Any(h => h.UniqueID == r.SaleId && h.BillNo.ToLower().Contains(term))));
-            }
-
-            var results = await query
-                .OrderByDescending(r => r.BillDate)
-                .ThenByDescending(r => r.ID)
+        var customerMasters = (customerIdRawValues.Count == 0 && numericCustomerIds.Count == 0)
+            ? new List<CustomerMasterRow>()
+            : await _db.CustomerMasters
+                .AsNoTracking()
+                .Where(c => customerIdRawValues.Contains(c.UniqueID) || numericCustomerIds.Contains(c.ID))
                 .ToListAsync(cancellationToken);
 
-            filter = new SalesReturnFilterViewModel
+        var customerByUniqueId = customerMasters
+            .Where(c => !string.IsNullOrWhiteSpace(c.UniqueID))
+            .GroupBy(c => c.UniqueID.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var customerById = customerMasters
+            .GroupBy(c => c.ID)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var rows = headers.Select(h =>
+        {
+            var customerUniqueId = (h.CustomerID ?? string.Empty).Trim();
+            string customerName;
+            string? customerPhone;
+
+            if (!string.IsNullOrWhiteSpace(customerUniqueId) && customerByUniqueId.TryGetValue(customerUniqueId, out var c))
+            {
+                customerName = c.CustomerName ?? string.Empty;
+                customerPhone = c.MobileNumber;
+            }
+            else if (int.TryParse(customerUniqueId, out var numericId) && customerById.TryGetValue(numericId, out var c2))
+            {
+                customerName = c2.CustomerName ?? string.Empty;
+                customerPhone = c2.MobileNumber;
+            }
+            else
+            {
+                customerName = string.IsNullOrWhiteSpace(customerUniqueId) || customerUniqueId == "0" ? "Walk-in" : "Walk-in";
+                customerPhone = null;
+            }
+
+            return new SalesReturnRowViewModel
+            {
+                Id = h.ID,
+                InvoiceNumber = h.BillNo ?? string.Empty,
+                SaleDate = h.BillDate,
+                CustomerName = customerName,
+                CustomerPhone = customerPhone,
+                GrandTotal = h.BillAmount ?? 0,
+                PaymentStatus = h.ActiveStatus ? "Completed" : "Cancelled"
+            };
+        }).ToList();
+
+        var vm = new SalesReturnViewModel
+        {
+            Filter = new SalesReturnFilterViewModel
             {
                 From = fromDate,
                 To = toDate,
                 Query = q
-            };
-
-            rows = results.Select(r => new SalesReturnRowViewModel
-            {
-                Id = r.ID,
-                BillNo = r.BillNo ?? string.Empty,
-                BillDate = r.BillDate,
-                CustomerID = r.CustomerID ?? string.Empty,
-                BillAmount = r.BillAmount,
-                SaleId = r.SaleId
-            }).ToList();
-        }
-
-        var vm = new SalesReturnViewModel
-        {
-            Filter = filter,
+            },
             Rows = rows
         };
 

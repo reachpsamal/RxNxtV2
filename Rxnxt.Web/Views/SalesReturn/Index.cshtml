@@ -23,7 +23,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label-custom">Search</label>
-                <input type="text" class="pharmacy-input" name="q" value="@Model.Filter.Query" placeholder="Bill No / Customer / Sale Ref" />
+                <input type="text" class="pharmacy-input" name="q" value="@Model.Filter.Query" placeholder="Invoice No" />
             </div>
             <div class="col-md-2" style="display:flex; gap:8px;">
                 <button type="submit" class="btn-primary-pharmacy" style="flex:1;">
@@ -48,22 +48,24 @@
                 <table class="sale-items-table" style="display: table;">
                     <thead>
                         <tr>
-                            <th>Bill No</th>
+                            <th>Invoice No</th>
                             <th>Date</th>
                             <th>Customer</th>
+                            <th>Phone</th>
                             <th>Amount</th>
-                            <th>Sale Ref</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var r in Model.Rows)
                         {
-                            <tr>
-                                <td style="font-weight:700;">@r.BillNo</td>
-                                <td>@r.BillDate.ToString("dd-MMM-yyyy hh:mm tt")</td>
-                                <td>@r.CustomerID</td>
-                                <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @(r.BillAmount?.ToString("0.00") ?? "0.00")</td>
-                                <td>@r.SaleId</td>
+                            <tr onclick="location.href='@Url.Action("Index", "Sales", new { editSaleId = r.Id, returnMode = 1 })'" style="cursor:pointer;">
+                                <td style="font-weight:700;">@r.InvoiceNumber</td>
+                                <td>@r.SaleDate.ToString("dd-MMM-yyyy hh:mm tt")</td>
+                                <td>@r.CustomerName</td>
+                                <td>@r.CustomerPhone</td>
+                                <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @r.GrandTotal.ToString("0.00")</td>
+                                <td>@r.PaymentStatus</td>
                             </tr>
                         }
                     </tbody>

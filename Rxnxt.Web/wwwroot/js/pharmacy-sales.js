@@ -65,7 +65,8 @@ function fromBaseQty(baseQty, saleUnit, baseUnit, otherUnit, factor) {
 }
 
 function getReturnRefundAmount() {
-    if (!isReturnMode || !originalSaleItemsByKey) return 0;
+    if (!isReturnMode) return 0;
+    if (!originalSaleItemsByKey) return getGrandTotal();
 
     let refund = 0;
     saleItems.forEach(item => {
@@ -550,9 +551,6 @@ function saveNewCustomer() {
 
 // ============ MEDICINE TABS ============
 function switchMedicineTab(tab) {
-    if (isReturnMode) {
-        return;
-    }
     $('.pharmacy-tab').removeClass('active');
     $('.tab-content-pharmacy').removeClass('active');
     if (tab === 'batch') {
@@ -790,10 +788,6 @@ $('#batchSearch').on('keydown', function (e) {
 
 // ============ CART MANAGEMENT ============
 function addToCart() {
-    if (isReturnMode) {
-        showToast('Return mode: cannot add items', 'warning');
-        return;
-    }
     if (!currentBatchInfo) { showToast('Please select a batch first', 'warning'); return; }
 
     const qty = parseInt($('#addQty').val()) || 0;
@@ -869,10 +863,6 @@ function addToCart() {
 }
 
 function addFromAdvancedSearch(productId, batchNumber) {
-    if (isReturnMode) {
-        showToast('Return mode: cannot add items', 'warning');
-        return;
-    }
     const addKey = `${String(productId || '').trim().toLowerCase()}|${String(batchNumber || '').trim().toLowerCase()}`;
     const now = Date.now();
     const lastInFlightAt = inFlightBatchAdds.get(addKey);
@@ -1191,8 +1181,8 @@ function renderSaleItems() {
                     </select>`}
                 </td>
                 <td>
-                    <input type="number" class="item-qty-input" value="${item.quantity}" min="${isReturnMode ? 0 : 1}" ${maxQtyAttr}
-                           oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
+                     <input type="number" class="item-qty-input" value="${item.quantity}" min="${isReturnMode ? 0 : 1}" ${maxQtyAttr}
+           oninput="updateItemQuantity(${index}, this.value)" onchange="updateItemQuantity(${index}, this.value)" id="qty-${index}">
 
                     
 
@@ -1366,10 +1356,6 @@ function removeItem(index) {
 }
 
 function clearAllItems() {
-    if (isReturnMode) {
-        showToast('Return mode: items cannot be cleared', 'warning');
-        return;
-    }
     const ok = window.confirm('Clear all sale items?');
     if (!ok) return;
     saleItems = [];
@@ -1668,10 +1654,6 @@ function syncSplitPayments(changedField, normalizeChangedField) {
 
 // ============ ADVANCED SEARCH ============
 function advancedSearch() {
-    if (isReturnMode) {
-        showToast('Return mode: cannot search/add items', 'warning');
-        return;
-    }
     const batchNumber = $('#advBatchNumber').val().trim();
     const medicineName = $('#advMedicineName').val().trim();
     const composition = $('#advComposition').val().trim();
@@ -1924,31 +1906,31 @@ function applyReturnModeLocks() {
     $('#selectedCustomerCard .customer-remove').hide();
 
     // Additional discount
-    $('#additionalDiscountPercent').prop('disabled', true);
-    $('#additionalDiscount').prop('disabled', true);
+    //$('#additionalDiscountPercent').prop('disabled', true);
+    //$('#additionalDiscount').prop('disabled', true);
 
     // Cash-only refund
     selectedPaymentMethod = 'Cash';
     $('.payment-method-card').css('pointer-events', 'none');
     $('#pmCash').addClass('selected');
-    $('#pmCard, #pmUpi, #pmSplit').hide();
+    //$('#pmCard, #pmUpi, #pmSplit').hide();
     $('.payment-detail-form').removeClass('show');
     $('#paymentCash').addClass('show');
     $('#cashAmountLabel').text('Refund Amount');
     $('#cashChangeBlock').hide();
-    $('#cashAmount').prop('readonly', true);
-    $('#cardAmount, #upiAmount, #splitCash, #splitCard, #splitUpi').prop('readonly', true);
-    $('#cardRefNo, #upiRefNo, #splitCardRefNo, #splitUpiRefNo').prop('readonly', true);
+    //$('#cashAmount').prop('readonly', true);
+    //$('#cardAmount, #upiAmount, #splitCash, #splitCard, #splitUpi').prop('readonly', true);
+    //$('#cardRefNo, #upiRefNo, #splitCardRefNo, #splitUpiRefNo').prop('readonly', true);
 
     // Prevent add/remove/clear
-    $('#clearCartBtn').hide();
+    /* $('#clearCartBtn').hide();*/
 
     // Prevent adding medicines
-    $('#medicineSearch, #batchSearch, #advBatchNumber, #advMedicineName, #advComposition, #advExpiryFrom, #advExpiryTo').prop('disabled', true);
-    $('#medicineDropdown, #batchDropdown').removeClass('show').empty();
-    $('#medicineBatchesCard, #batchInfoCard').removeClass('show').empty();
-    $('#advancedSearchResults').empty();
-    $('#tabDirect, #tabBatch, #tabAdvanced').prop('disabled', true).css('pointer-events', 'none');
+    //$('#medicineSearch, #batchSearch, #advBatchNumber, #advMedicineName, #advComposition, #advExpiryFrom, #advExpiryTo').prop('disabled', true);
+    //$('#medicineDropdown, #batchDropdown').removeClass('show').empty();
+    //$('#medicineBatchesCard, #batchInfoCard').removeClass('show').empty();
+    //$('#advancedSearchResults').empty();
+    //$('#tabDirect, #tabBatch, #tabAdvanced').prop('disabled', true).css('pointer-events', 'none');
 }
 
 function loadSaleForEdit(saleId) {
@@ -1999,72 +1981,74 @@ function loadSaleForEdit(saleId) {
                 $('#skipCustomerBtn').show();
             }
 
-            // Items
-            const items = data.items || [];
-            saleItems = [];
-            originalSaleItemsByKey = {};
-            originalSaleAdditionalDiscount = parseFloat(data.additionalDiscount) || parseFloat(data.additionalDiscountAmount) || 0;
-            items.forEach(i => {
-                const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
-                const resolvedName = readStockProductName(stock) || '';
-                const resolvedUom = readStockUom(stock) || 'PCS';
-                const resolvedTaxPercent = detectGstPercentFromTaxName(readStockTaxName(stock));
+            // Items (skip in return mode — only customer details are needed)
+            if (!isReturnMode) {
+                const items = data.items || [];
+                saleItems = [];
+                originalSaleItemsByKey = {};
+                originalSaleAdditionalDiscount = parseFloat(data.additionalDiscount) || parseFloat(data.additionalDiscountAmount) || 0;
+                items.forEach(i => {
+                    const stock = findStockByProductBatch(i.productId, i.batchNumber) || findStockByProductId(i.productId);
+                    const resolvedName = readStockProductName(stock) || '';
+                    const resolvedUom = readStockUom(stock) || 'PCS';
+                    const resolvedTaxPercent = detectGstPercentFromTaxName(readStockTaxName(stock));
 
-                const qty = parseFloat(i.quantity) || 0;
-                const price = parseFloat(i.price) || 0;
-                const originalLineTotal = parseFloat(i.total);
+                    const qty = parseFloat(i.quantity) || 0;
+                    const price = parseFloat(i.price) || 0;
+                    const originalLineTotal = parseFloat(i.total);
 
-                const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
-                originalSaleItemsByKey[key] = {
-                    qty: qty,
-                    baseQty: qty,
-                    uomName: i.uomName || 'PCS',
-                    saleUomName: i.uomName || 'PCS',
-                    total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
-                };
+                    const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
+                    originalSaleItemsByKey[key] = {
+                        qty: qty,
+                        baseQty: qty,
+                        uomName: i.uomName || 'PCS',
+                        saleUomName: i.uomName || 'PCS',
+                        total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
+                    };
 
-                const serverDiscPercent = parseFloat(i.discountPercent) || 0;
-                const serverDiscAmount = parseFloat(i.discountAmount) || 0;
-                const lineTotal = price * qty;
-                const derivedDiscPercent = (serverDiscPercent > 0)
-                    ? serverDiscPercent
-                    : (lineTotal > 0 && serverDiscAmount > 0) ? (serverDiscAmount / lineTotal) * 100 : 0;
+                    const serverDiscPercent = parseFloat(i.discountPercent) || 0;
+                    const serverDiscAmount = parseFloat(i.discountAmount) || 0;
+                    const lineTotal = price * qty;
+                    const derivedDiscPercent = (serverDiscPercent > 0)
+                        ? serverDiscPercent
+                        : (lineTotal > 0 && serverDiscAmount > 0) ? (serverDiscAmount / lineTotal) * 100 : 0;
 
-                const serverTaxPercent = parseFloat(i.taxPercent);
-                const effectiveTaxPercent = Number.isFinite(serverTaxPercent) && serverTaxPercent > 0
-                    ? serverTaxPercent
-                    : (parseFloat(resolvedTaxPercent) || 0);
+                    const serverTaxPercent = parseFloat(i.taxPercent);
+                    const effectiveTaxPercent = Number.isFinite(serverTaxPercent) && serverTaxPercent > 0
+                        ? serverTaxPercent
+                        : (parseFloat(resolvedTaxPercent) || 0);
 
-                const item = {
-                    productId: i.productId,
-                    productName: (i.productName && String(i.productName).trim()) ? i.productName : resolvedName,
-                    batchNumber: i.batchNumber,
-                    expiryDate: i.expiryDate,
-                    uomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
-                    saleUomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
-                    quantity: qty,
-                    unitType: i.unitType || (i.uomName || 'PCS'),
-                    price: price,
-                    discountPercent: derivedDiscPercent,
-                    discountAmount: 0,
-                    taxPercent: effectiveTaxPercent,
-                    taxAmount: 0,
-                    baseTotal: 0,
-                    total: 0,
-                    availableQty: i.availableQty
-                };
-                saleItems.push(item);
-                recalculateItem(saleItems.length - 1);
-            });
+                    const item = {
+                        productId: i.productId,
+                        productName: (i.productName && String(i.productName).trim()) ? i.productName : resolvedName,
+                        batchNumber: i.batchNumber,
+                        expiryDate: i.expiryDate,
+                        uomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
+                        saleUomName: (i.uomName && String(i.uomName).trim()) ? i.uomName : resolvedUom,
+                        quantity: qty,
+                        unitType: i.unitType || (i.uomName || 'PCS'),
+                        price: price,
+                        discountPercent: derivedDiscPercent,
+                        discountAmount: 0,
+                        taxPercent: effectiveTaxPercent,
+                        taxAmount: 0,
+                        baseTotal: 0,
+                        total: 0,
+                        availableQty: i.availableQty
+                    };
+                    saleItems.push(item);
+                    recalculateItem(saleItems.length - 1);
+                });
 
-            // Additional discount
-            const addDisc = parseFloat(data.additionalDiscount) || 0;
-            $('#additionalDiscount').val(addDisc.toFixed(2));
-            // back-calc percent from current subtotal-after-item-discount
-            const base = computeSubtotalBeforeAdditionalDiscount();
-            const percent = base > 0 ? (addDisc / base) * 100 : 0;
-            // Keep more precision to avoid amount drift after subsequent recalculations
-            $('#additionalDiscountPercent').val(percent.toFixed(2));
+                // Additional discount
+                const addDisc = parseFloat(data.additionalDiscount) || 0;
+                $('#additionalDiscount').val(addDisc.toFixed(2));
+                // back-calc percent from current subtotal-after-item-discount
+                const base = computeSubtotalBeforeAdditionalDiscount();
+                const percent = base > 0 ? (addDisc / base) * 100 : 0;
+                // Keep more precision to avoid amount drift after subsequent recalculations
+                $('#additionalDiscountPercent').val(percent.toFixed(2));
+            }
 
             // Payment prefill
             const p = data.payment || {};
@@ -2114,10 +2098,12 @@ function loadSaleForEdit(saleId) {
                 $('#splitRemaining').text(formatCurrency(rem));
             }
 
-            renderSaleItems();
-            recalculateBill();
-            updateCompleteSaleBtn();
-            switchMedicineTab('direct');
+            if (!isReturnMode) {
+                renderSaleItems();
+                recalculateBill();
+                updateCompleteSaleBtn();
+                switchMedicineTab('direct');
+            }
 
             applyReturnModeLocks();
 

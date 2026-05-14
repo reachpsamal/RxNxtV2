@@ -10,11 +10,13 @@ public sealed class StockController : Controller
 {
     private readonly PharmacyDbContext _db;
     private readonly StockService _stockService;
+    private readonly IConfiguration _configuration;
 
-    public StockController(PharmacyDbContext db, StockService stockService)
+    public StockController(PharmacyDbContext db, StockService stockService, IConfiguration configuration)
     {
         _db = db;
         _stockService = stockService;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -36,6 +38,12 @@ public sealed class StockController : Controller
         };
 
         var query = _db.ProductStockView.AsNoTracking();
+
+        var tenantId = _configuration["ExternalApis:ArogyaStocks:TenantId"];
+        if (!string.IsNullOrWhiteSpace(tenantId))
+        {
+            query = query.Where(s => s.TenantId == tenantId);
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
