@@ -70,10 +70,16 @@
                     <i class="bi bi-bag-plus"></i>
                     <span>Purchase</span>
                 </a>
-                <a href="#" class="nav-item" title="Inventory">
-                    <i class="bi bi-box-seam"></i>
-                    <span>Inventory</span>
+                <a href="@Url.Action("Index", "Stock")" class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Stock" ? "active" : "")" title="Stock Report">
+                    <i class="bi bi-boxes"></i>
+                    <span>Stock Report</span>
                 </a>
+
+                <a href="@Url.Action("Index", "SalesReturn")" class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "SalesReturn" ? "active" : "")" title="Sales Return">
+                    <i class="bi bi-boxes"></i>
+                    <span>Sales Return</span>
+                </a>
+
                 <a href="#" class="nav-item" title="Customers">
                     <i class="bi bi-people"></i>
                     <span>Customers</span>

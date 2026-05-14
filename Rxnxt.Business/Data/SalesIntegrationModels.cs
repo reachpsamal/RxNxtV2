@@ -390,3 +390,135 @@ public sealed class SalesReturnDetailRow
     [Column(TypeName = "decimal(18,2)")]
     public decimal? SaleUOMQty { get; set; }
 }
+
+[Table("GRNHeader")]
+public sealed class GrnHeaderRow
+{
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int ID { get; set; }
+
+    [Key]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string GRNNo { get; set; } = string.Empty;
+
+    public DateTime GRNDate { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string GRNType { get; set; } = "PURCHASE";
+
+    [Required]
+    [StringLength(50)]
+    public string SupplierID { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    public string? RefNumber { get; set; }
+
+    public DateTime? RefDate { get; set; }
+
+    [StringLength(50)]
+    public string? POID { get; set; }
+
+    [StringLength(50)]
+    public string? WayBillNo { get; set; }
+
+    public DateTime? WayBillDate { get; set; }
+
+    [StringLength(500)]
+    public string? Narration { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? BillAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? TaxAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? DiscountAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ExtraAdd { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ExtraLess { get; set; }
+
+    public bool ActiveStatus { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string CreatedBy { get; set; } = string.Empty;
+
+    public DateTime CreatedDate { get; set; }
+
+    [StringLength(50)]
+    public string? ModifiedBy { get; set; }
+
+    public DateTime? ModifiedDate { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? TotalBeforeRoundOff { get; set; }
+}
+
+[Table("GRNDetail")]
+public sealed class GrnDetailRow
+{
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int ID { get; set; }
+
+    [Key]
+    [StringLength(50)]
+    public string UniqueID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string GRNID { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string ProductID { get; set; } = string.Empty;
+
+    [StringLength(50)]
+    public string? BatchNumber { get; set; }
+
+    public DateTime? ExpiryDate { get; set; }
+
+    [StringLength(50)]
+    public string? UnitID { get; set; }
+
+    [StringLength(50)]
+    public string? PackTypeID { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? MRP { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? PurchasePrice { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? SalePrice { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? FreeQty { get; set; }
+
+    [StringLength(500)]
+    public string? Remarks { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? Qty { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ItemDiscPerc { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? ItemDiscAmount { get; set; }
+}

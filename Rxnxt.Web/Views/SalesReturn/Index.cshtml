@@ -1,0 +1,76 @@
+@model Rxnxt.Web.ViewModels.SalesReturnViewModel
+
+@{
+    ViewData["Title"] = "Sales Return";
+}
+
+<div class="section-card">
+    <div class="section-header">
+        <div class="section-title">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            Sales Return
+        </div>
+    </div>
+    <div class="section-body">
+        <form method="get" asp-controller="SalesReturn" asp-action="Index" class="row g-2 sales-history-filter" style="align-items:end;">
+            <div class="col-md-3">
+                <label class="form-label-custom">From</label>
+                <input type="date" class="pharmacy-input" name="from" value="@(Model.Filter.From?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label-custom">To</label>
+                <input type="date" class="pharmacy-input" name="to" value="@(Model.Filter.To?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label-custom">Search</label>
+                <input type="text" class="pharmacy-input" name="q" value="@Model.Filter.Query" placeholder="Invoice No" />
+            </div>
+            <div class="col-md-2" style="display:flex; gap:8px;">
+                <button type="submit" class="btn-primary-pharmacy" style="flex:1;">
+                    <i class="bi bi-search"></i> Search
+                </button>
+                <a class="btn-ghost" style="flex:1; justify-content:center; display:inline-flex; align-items:center;" href="@Url.Action("Index", "SalesReturn")">
+                    Clear
+                </a>
+            </div>
+        </form>
+
+        <div style="margin-top:16px;">
+            @if (Model.Rows == null || Model.Rows.Count == 0)
+            {
+                <div class="autocomplete-no-results" style="padding:20px;">
+                    <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                    No sales returns found
+                </div>
+            }
+            else
+            {
+                <table class="sale-items-table" style="display: table;">
+                    <thead>
+                        <tr>
+                            <th>Invoice No</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Phone</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr onclick="location.href='@Url.Action("Index", "Sales", new { editSaleId = r.Id, returnMode = 1 })'" style="cursor:pointer;">
+                                <td style="font-weight:700;">@r.InvoiceNumber</td>
+                                <td>@r.SaleDate.ToString("dd-MMM-yyyy hh:mm tt")</td>
+                                <td>@r.CustomerName</td>
+                                <td>@r.CustomerPhone</td>
+                                <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @r.GrandTotal.ToString("0.00")</td>
+                                <td>@r.PaymentStatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
