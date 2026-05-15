@@ -1902,7 +1902,7 @@ function applyReturnModeLocks() {
     selectedPaymentMethod = 'Cash';
     $('.payment-method-card').css('pointer-events', 'none');
     $('#pmCash').addClass('selected');
-    //$('#pmCard, #pmUpi, #pmSplit').hide();
+    $('#pmCard, #pmUpi, #pmSplit').hide();
     $('.payment-detail-form').removeClass('show');
     $('#paymentCash').addClass('show');
     $('#cashAmountLabel').text('Refund Amount');

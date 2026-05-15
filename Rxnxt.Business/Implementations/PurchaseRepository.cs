@@ -246,8 +246,7 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
 
         private async Task UpsertProductStockAsync(string productId, string? batchNumber, DateTime? expiryDate, decimal qtyToAdd)
         {
-            static string NormalizeBatch(string? b) => (b ?? string.Empty).Trim();
-            var batchNorm = NormalizeBatch(batchNumber);
+            var batchNorm = (batchNumber ?? string.Empty).Trim();
 
             ProductStockRow? row = null;
             if (expiryDate.HasValue)
@@ -258,6 +257,13 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
                     (ps.BatchNumber ?? string.Empty) == batchNorm &&
                     ps.ExpiryDate.HasValue &&
                     ps.ExpiryDate.Value.Date == exp);
+            }
+
+            if (row == null)
+            {
+                row = await _context.ProductStocks.FirstOrDefaultAsync(ps =>
+                    ps.ProductID == productId &&
+                    (ps.BatchNumber ?? string.Empty) == batchNorm);
             }
 
             if (row == null)
@@ -274,6 +280,8 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
             else
             {
                 row.PackQty = (row.PackQty ?? 0m) + qtyToAdd;
+                if (!row.ExpiryDate.HasValue && expiryDate.HasValue)
+                    row.ExpiryDate = expiryDate.Value.Date;
             }
         }
 
