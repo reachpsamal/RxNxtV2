@@ -13,6 +13,7 @@ let isReturnMode = false;
 
 let originalSaleItemsByKey = null;
 let allowedReturnItemKeys = null;
+let originalSaleItemsByPidBnKey = null;
 let originalSaleAdditionalDiscount = 0;
 
 const productUomOptionsCache = new Map();
@@ -67,41 +68,7 @@ function fromBaseQty(baseQty, saleUnit, baseUnit, otherUnit, factor) {
 
 function getReturnRefundAmount() {
     if (!isReturnMode) return 0;
-    if (!originalSaleItemsByKey) return getGrandTotal();
-
-    let refund = 0;
-    saleItems.forEach(item => {
-        const key = makeSaleItemKeyFromFields(item.productId, item.batchNumber, item.expiryDate);
-        const old = originalSaleItemsByKey[key];
-        if (!old) return;
-
-        const oldTotal = parseFloat(old.total);
-        const oldQty = Number.isFinite(parseFloat(old.qty)) ? parseFloat(old.qty) : (parseFloat(old.baseQty) || 0);
-        const oldUnit = old.saleUomName || old.uomName || item.saleUomName || item.uomName;
-        const newQty = parseFloat(item.quantity) || 0;
-
-        if (!Number.isFinite(oldTotal) || oldTotal <= 0 || oldQty <= 0) return;
-
-        const uomOpt = getCachedUomOptions(item.productId);
-        const baseUnit = normalizeUomName(uomOpt?.baseUomName) || normalizeUomName(item.uomName);
-        const otherUnit = normalizeUomName(uomOpt?.otherUomName);
-        const factor = parseFloat(uomOpt?.conversionFactor) || 1;
-
-        const saleUnit = normalizeUomName(item.saleUomName) || normalizeUomName(item.uomName) || baseUnit;
-        const oldBaseQty = toBaseQty(oldQty, oldUnit, baseUnit, otherUnit, factor);
-        const newBaseQty = toBaseQty(newQty, saleUnit, baseUnit, otherUnit, factor);
-
-        if (oldBaseQty <= 0) return;
-
-        const returnedBaseQty = Math.max(0, oldBaseQty - newBaseQty);
-        if (returnedBaseQty <= 0) return;
-
-        const ratio = returnedBaseQty / oldBaseQty;
-        const lineRefund = round2(oldTotal * ratio);
-        refund = round2(refund + lineRefund);
-    });
-
-    return refund;
+    return getGrandTotal();
 }
 
 function getCachedUomOptions(productId) {
@@ -1820,6 +1787,7 @@ function startNewSale() {
     editingSaleId = null;
     isReturnMode = false;
     originalSaleItemsByKey = null;
+    originalSaleItemsByPidBnKey = null;
     allowedReturnItemKeys = null;
     originalSaleAdditionalDiscount = 0;
     window.__lastCompletedSaleId = null;
@@ -2006,12 +1974,14 @@ function loadSaleForEdit(saleId) {
             {
                 const items = data.items || [];
                 originalSaleItemsByKey = {};
+                originalSaleItemsByPidBnKey = {};
                 allowedReturnItemKeys = new Set();
                 items.forEach(i => {
                     const qty = parseFloat(i.quantity) || 0;
                     const price = parseFloat(i.price) || 0;
                     const originalLineTotal = parseFloat(i.total);
                     const key = makeSaleItemKeyFromFields(i.productId, i.batchNumber, i.expiryDate);
+                    const pidBnKey = `${String(i.productId || '').trim().toLowerCase()}|${String(i.batchNumber || '').trim().toLowerCase()}`;
                     originalSaleItemsByKey[key] = {
                         qty: qty,
                         baseQty: qty,
@@ -2019,7 +1989,10 @@ function loadSaleForEdit(saleId) {
                         saleUomName: i.uomName || 'PCS',
                         total: Number.isFinite(originalLineTotal) ? originalLineTotal : (price * qty)
                     };
-                    allowedReturnItemKeys.add(`${String(i.productId || '').trim().toLowerCase()}|${String(i.batchNumber || '').trim().toLowerCase()}`);
+                    if (!originalSaleItemsByPidBnKey[pidBnKey]) {
+                        originalSaleItemsByPidBnKey[pidBnKey] = originalSaleItemsByKey[key];
+                    }
+                    allowedReturnItemKeys.add(pidBnKey);
                 });
             }
 
