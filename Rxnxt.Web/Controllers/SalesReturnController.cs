@@ -19,19 +19,35 @@ public sealed class SalesReturnController : Controller
     {
         _ = cancellationToken;
 
-        var fromDate = (from ?? DateTime.Today).Date;
-        var toDate = (to ?? DateTime.Today).Date;
+        var hasDateFilter = from.HasValue && to.HasValue;
+        var hasQuery = !string.IsNullOrWhiteSpace(q);
 
-        if (toDate < fromDate)
+        if (!hasDateFilter && !hasQuery)
         {
-            (fromDate, toDate) = (toDate, fromDate);
+            return View(new SalesReturnViewModel
+            {
+                Filter = new SalesReturnFilterViewModel
+                {
+                    From = DateTime.Today,
+                    To = DateTime.Today,
+                    Query = q
+                }
+            });
         }
 
-        var toDt = toDate.AddDays(1).AddTicks(-1);
+        var headerQuery = _db.SaleHeaders.AsNoTracking();
 
-        var headerQuery = _db.SaleHeaders
-            .AsNoTracking()
-            .Where(h => h.BillDate >= fromDate && h.BillDate <= toDt);
+        if (!hasQuery && hasDateFilter)
+        {
+            var fromDate = from.Value.Date;
+            var toDate = to.Value.Date;
+            if (toDate < fromDate)
+            {
+                (fromDate, toDate) = (toDate, fromDate);
+            }
+            var toDt = toDate.AddDays(1).AddTicks(-1);
+            headerQuery = headerQuery.Where(h => h.BillDate >= fromDate && h.BillDate <= toDt);
+        }
 
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -112,8 +128,8 @@ public sealed class SalesReturnController : Controller
         {
             Filter = new SalesReturnFilterViewModel
             {
-                From = fromDate,
-                To = toDate,
+                From = from ?? DateTime.Today,
+                To = to ?? DateTime.Today,
                 Query = q
             },
             Rows = rows
