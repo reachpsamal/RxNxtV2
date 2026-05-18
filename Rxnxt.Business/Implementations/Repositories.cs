@@ -882,11 +882,6 @@ namespace Rxnxt.Business.Implementations
                                     return new SaleResult { Success = false, Message = "Return mode: invalid item." };
                                 }
 
-                                if (Math.Abs((old.ItemDiscPerc ?? 0m) - i.DiscountPercent) > 0.01m)
-                                {
-                                    return new SaleResult { Success = false, Message = "Return mode: discount cannot be changed." };
-                                }
-
                                 if (Math.Abs((old.TaxPerc ?? 0m) - i.TaxPercent) > 0.01m)
                                 {
                                     return new SaleResult { Success = false, Message = "Return mode: tax cannot be changed." };

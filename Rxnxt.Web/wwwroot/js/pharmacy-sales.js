@@ -1007,7 +1007,9 @@ function formatExpiryDate(expiryDate) {
 function getMaxQtyForItem(item) {
     if (isReturnMode && originalSaleItemsByKey) {
         const key = makeSaleItemKeyFromFields(item.productId, item.batchNumber, item.expiryDate);
-        const old = originalSaleItemsByKey[key];
+        const pidBnKey = `${String(item.productId || '').trim().toLowerCase()}|${String(item.batchNumber || '').trim().toLowerCase()}`;
+        let old = originalSaleItemsByKey[key];
+        if (!old && originalSaleItemsByPidBnKey) old = originalSaleItemsByPidBnKey[pidBnKey];
         if (old) {
             const oldQty = Number.isFinite(parseFloat(old.qty)) ? parseFloat(old.qty) : (parseFloat(old.baseQty) || 0);
             const oldUnit = old.saleUomName || old.uomName || item.saleUomName || item.uomName;
@@ -1173,7 +1175,7 @@ function renderSaleItems() {
                 <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
                 <td>
                     <input type="number" class="item-discount-input" value="${item.discountPercent}" min="0" max="100" step="0.5"
-                           ${isReturnMode ? 'disabled' : ''} oninput="updateItemDiscountLive(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
+                            oninput="updateItemDiscountLive(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
                 </td>
                 <td id="discAmt-${index}" style="color: var(--accent-600); font-variant-numeric: tabular-nums;">${formatCurrency(item.discountAmount)}</td>
                 <td id="taxAmt-${index}" style="font-variant-numeric: tabular-nums;">${formatCurrency(item.taxAmount || 0)}</td>
@@ -1276,11 +1278,6 @@ function updateItemQuantity(index, value) {
 }
 
 function updateItemDiscount(index, value) {
-    if (isReturnMode) {
-        showToast('Return mode: discount cannot be changed', 'warning');
-        $(`#disc-${index}`).val(saleItems[index].discountPercent);
-        return;
-    }
     const disc = parseFloat(value);
     if (!Number.isFinite(disc) || disc < 0 || disc > 100) {
         showToast('Discount must be between 0 and 100%', 'error');
@@ -1292,10 +1289,6 @@ function updateItemDiscount(index, value) {
 }
 
 function updateItemDiscountLive(index, value) {
-    if (isReturnMode) {
-        return;
-    }
-
     if (value === '' || value === null || value === undefined) {
         saleItems[index].discountPercent = 0;
     } else {
