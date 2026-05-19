@@ -1741,8 +1741,63 @@ function completeSale() {
 
     // Disable button and show loading
     $('#completeSaleBtn').prop('disabled', true).html('<span class="spinner-pharmacy"></span> Processing...');
-    document.getElementById('saleJson').value = JSON.stringify(request);
-    document.getElementById('completeSaleForm').submit();
+
+    const formData = new FormData(document.getElementById('completeSaleForm'));
+    formData.set('SaleJson', JSON.stringify(request));
+
+    fetch('/Sales/CompleteSale', {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const errorInput = doc.querySelector('#serverSaleError');
+            const successInput = doc.querySelector('#serverSaleSuccessInvoice');
+            const saleIdInput = doc.querySelector('#serverSaleSuccessId');
+
+            if (errorInput && errorInput.value) {
+                showToast(errorInput.value, 'error');
+                $('#completeSaleBtn').prop('disabled', false).html('<i class="bi bi-check-circle"></i> Complete Sale');
+                return;
+            }
+
+            if (successInput && successInput.value) {
+                const invoice = successInput.value;
+                const saleId = parseInt(saleIdInput?.value || '', 10) || null;
+
+                $('#successInvoice').text(`#${invoice}`);
+                $('#successOverlay').addClass('show');
+
+                window.__lastCompletedSaleId = saleId;
+                const $printBtn = $('#printBillBtn');
+                if (saleId && $printBtn.length) {
+                    $printBtn.show();
+                }
+
+                saleItems = [];
+                editingSaleId = null;
+                isReturnMode = false;
+                originalSaleItemsByKey = null;
+                originalSaleItemsByPidBnKey = null;
+                allowedReturnItemKeys = null;
+                renderSaleItems();
+                recalculateBill();
+                updateCompleteSaleBtn();
+
+                $('#completeSaleBtn').prop('disabled', false).html('<i class="bi bi-check-circle"></i> Complete Sale');
+                return;
+            }
+
+            showToast('Unexpected server response', 'error');
+            $('#completeSaleBtn').prop('disabled', false).html('<i class="bi bi-check-circle"></i> Complete Sale');
+        })
+        .catch(err => {
+            showToast('Network error: ' + err.message, 'error');
+            $('#completeSaleBtn').prop('disabled', false).html('<i class="bi bi-check-circle"></i> Complete Sale');
+        });
 }
 
 // Show server result after redirect
