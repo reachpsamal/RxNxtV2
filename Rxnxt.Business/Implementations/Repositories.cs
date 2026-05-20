@@ -737,24 +737,10 @@ namespace Rxnxt.Business.Implementations
                 var additionalDiscount = request.AdditionalDiscount;
                 if (additionalDiscount < 0) additionalDiscount = 0;
 
-                decimal grandTotal = 0;
-                decimal totalTaxAfterAllDiscounts = 0;
+                var grandTotal = Math.Max(0, baseSum - additionalDiscount);
 
-                for (var i = 0; i < saleItems.Count; i++)
-                {
-                    var baseAfterItemDisc = lineBases[i].AfterItemDisc;
-                    var share = (additionalDiscount > 0 && baseSum > 0) ? (additionalDiscount * (baseAfterItemDisc / baseSum)) : 0;
-                    var afterAllDiscounts = Math.Max(0, baseAfterItemDisc - share);
-                    var gst = saleItems[i].TaxPercent;
-                    var includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
-                    includedTax = Math.Round(includedTax, 2, MidpointRounding.AwayFromZero);
-                    saleItems[i].TaxAmount = includedTax;
-                    saleItems[i].Total = afterAllDiscounts;
-                    totalTaxAfterAllDiscounts += includedTax;
-                    grandTotal += afterAllDiscounts;
-                }
-
-                totalTax = totalTaxAfterAllDiscounts;
+                // Additional discount is header-level only (ExtraLess),
+                // NOT distributed into item-level totals/tax in SaleDetail.
 
                 var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
                 if (salesIntegrationEnabled)
@@ -1442,8 +1428,6 @@ namespace Rxnxt.Business.Implementations
                         stockRow.PackQty = available - requiredBaseQty;
                     }
 
-                    var detailBaseSum = baseSum;
-
                     foreach (var tuple in lineBases)
                     {
                         var item = tuple.Item;
@@ -1451,13 +1435,11 @@ namespace Rxnxt.Business.Implementations
                         decimal lineTotal = tuple.Gross;
                         decimal discountAmt = tuple.ItemDisc;
                         decimal afterItemDisc = tuple.AfterItemDisc;
-                        var share = (additionalDiscount > 0 && detailBaseSum > 0) ? (additionalDiscount * (afterItemDisc / detailBaseSum)) : 0;
-                        var afterAllDiscounts = Math.Max(0, afterItemDisc - share);
                         var gst = item.TaxPercent;
-                        decimal includedTax = gst > 0 ? (afterAllDiscounts * (gst / (100 + gst))) : 0;
+                        decimal includedTax = gst > 0 ? (afterItemDisc * (gst / (100 + gst))) : 0;
                         includedTax = Math.Round(includedTax, 2, MidpointRounding.AwayFromZero);
-                        decimal taxable = afterAllDiscounts - includedTax;
-                        decimal total = afterAllDiscounts;
+                        decimal taxable = afterItemDisc - includedTax;
+                        decimal total = afterItemDisc;
 
                         var selectedUomName = (item.SaleUomName ?? item.UomName ?? string.Empty).Trim();
                         if (string.IsNullOrWhiteSpace(selectedUomName)) selectedUomName = item.UomName;
