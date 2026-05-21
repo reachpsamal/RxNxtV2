@@ -1,0 +1,225 @@
+@model Rxnxt.Web.ViewModels.SaleSummaryViewModel
+@{
+    ViewData["Title"] = "Sale Summary";
+    bool Selected(string value, string current) => string.Equals(value, current, StringComparison.OrdinalIgnoreCase);
+    string Fmt(decimal v) => v.ToString("0.00");
+}
+
+<div class="stock-report-page">
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-graph-up"></i>
+                Sale Summary
+            </div>
+            <span class="section-badge info">@Model.TotalBills bills</span>
+        </div>
+        <div class="section-body">
+            <div class="stock-summary-grid" style="grid-template-columns: repeat(6, minmax(140px, 1fr));">
+                <div class="stock-summary-tile">
+                    <span class="stock-summary-label">Total Bills</span>
+                    <strong>@Model.TotalBills</strong>
+                </div>
+                <div class="stock-summary-tile">
+                    <span class="stock-summary-label">Avg Bill Value</span>
+                    <strong>₹ @Fmt(Model.AvgBillValue)</strong>
+                </div>
+                <div class="stock-summary-tile success">
+                    <span class="stock-summary-label">Cash</span>
+                    <strong>₹ @Fmt(Model.CashAmount)</strong>
+                </div>
+                <div class="stock-summary-tile success">
+                    <span class="stock-summary-label">UPI</span>
+                    <strong>₹ @Fmt(Model.UpiAmount)</strong>
+                </div>
+                <div class="stock-summary-tile success">
+                    <span class="stock-summary-label">Card</span>
+                    <strong>₹ @Fmt(Model.CardAmount)</strong>
+                </div>
+                <div class="stock-summary-tile @(Model.ReturnPercentage > 5 ? "warning" : "")">
+                    <span class="stock-summary-label">Return %</span>
+                    <strong>@Fmt(Model.ReturnPercentage)%</strong>
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(ViewBag.ErrorMessage as string))
+            {
+                <div style="margin-top:10px;padding:10px 14px;background:var(--danger-50);border:1px solid var(--danger-100);border-radius:var(--radius-md);color:var(--danger-700);font-size:0.875rem;">
+                    @ViewBag.ErrorMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="section-card" style="margin-top:16px;">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-funnel"></i>
+                Filters
+            </div>
+            <a class="btn-ghost" href="@Url.Action("Summary", "Sales")">
+                <i class="bi bi-x-circle"></i> Clear
+            </a>
+        </div>
+        <div class="section-body">
+            <form method="get" asp-action="Summary" asp-controller="Sales">
+                <div class="stock-filter-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;">
+                    <div>
+                        <label class="form-label-custom">From</label>
+                        <input type="date" class="pharmacy-input" name="From" value="@Model.Filter.From.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">To</label>
+                        <input type="date" class="pharmacy-input" name="To" value="@Model.Filter.To.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Store</label>
+                        <select class="pharmacy-input" name="StoreId">
+                            <option value="">All</option>
+                            @foreach (var s in Model.Filter.StoreOptions)
+                            {
+                                <option value="@s" selected="@(Model.Filter.StoreId == s)">@s</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Cashier</label>
+                        <select class="pharmacy-input" name="CreatedBy">
+                            <option value="">All</option>
+                            @foreach (var u in Model.Filter.UserOptions)
+                            {
+                                <option value="@u" selected="@(Model.Filter.CreatedBy == u)">@u</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Payment Mode</label>
+                        <select class="pharmacy-input" name="PaymentMode">
+                            <option value="All" selected="@Selected("All", Model.Filter.PaymentMode ?? "All")">All</option>
+                            <option value="Cash" selected="@Selected("Cash", Model.Filter.PaymentMode ?? string.Empty)">Cash</option>
+                            <option value="Card" selected="@Selected("Card", Model.Filter.PaymentMode ?? string.Empty)">Card</option>
+                            <option value="UPI" selected="@Selected("UPI", Model.Filter.PaymentMode ?? string.Empty)">UPI</option>
+                        </select>
+                    </div>
+                    <div class="stock-filter-action" style="gap:6px; display:flex;">
+                        <button class="btn-primary-pharmacy" type="submit">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <div class="dropdown-wrap">
+                            <button class="btn-secondary-pharmacy dropdown-trigger" type="button" onclick="this.nextElementSibling.classList.toggle('open')">
+                                <i class="bi bi-download"></i> Download <i class="bi bi-chevron-down" style="font-size:10px;"></i>
+                            </button>
+                            <div class="dropdown-menu">
+                                <button class="dropdown-item" type="submit" formaction="@Url.Action("SummaryExcel")">
+                                    <i class="bi bi-file-earmark-excel"></i> Excel
+                                </button>
+                                <button class="dropdown-item" type="submit" formaction="@Url.Action("SummaryPdf")">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stock-filter-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-top:10px;">
+                    <div>
+                        <label class="form-label-custom">Bill Status</label>
+                        <select class="pharmacy-input" name="BillStatus">
+                            <option value="All" selected="@Selected("All", Model.Filter.BillStatus)">All</option>
+                            <option value="Completed" selected="@Selected("Completed", Model.Filter.BillStatus)">Completed</option>
+                            <option value="Cancelled" selected="@Selected("Cancelled", Model.Filter.BillStatus)">Cancelled</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Group By</label>
+                        <select class="pharmacy-input" name="GroupBy">
+                            <option value="Day" selected="@Selected("Day", Model.Filter.GroupBy)">Day-wise</option>
+                            <option value="Month" selected="@Selected("Month", Model.Filter.GroupBy)">Month-wise</option>
+                            <option value="User" selected="@Selected("User", Model.Filter.GroupBy)">User-wise</option>
+                            <option value="Payment" selected="@Selected("Payment", Model.Filter.GroupBy)">Payment-wise</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="section-card" style="margin-top:16px;">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-table"></i>
+                Summary @(Model.Filter.GroupBy switch { "Month" => "(Month-wise)", "User" => "(User-wise)", "Payment" => "(Payment-wise)", _ => "(Day-wise)" })
+            </div>
+        </div>
+        <div class="section-body">
+            @if (Model.Rows.Count == 0)
+            {
+                <div class="empty-cart stock-empty-state">
+                    <i class="bi bi-inboxes"></i>
+                    <p>No data found</p>
+                    <span>Adjust filters to view sale summary.</span>
+                </div>
+            }
+            else
+            {
+                <div class="stock-table-wrap">
+                    <table class="stock-report-table">
+                        <thead>
+                            <tr>
+                                <th>@(Model.Filter.GroupBy switch { "Month" => "Month", "User" => "User", "Payment" => "Mode", _ => "Date" })</th>
+                                <th class="text-right">Bills</th>
+                                <th class="text-right">Gross</th>
+                                <th class="text-right">Discount</th>
+                                <th class="text-right">Tax</th>
+                                <th class="text-right">Net</th>
+                                <th class="text-right">Round Off</th>
+                                <th class="text-right">Paid</th>
+                                <th class="text-right">Refund</th>
+                                <th class="text-right">Outstanding</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Model.Rows)
+                            {
+                                <tr>
+                                    <td><strong>@r.GroupKey</strong></td>
+                                    <td class="text-right">@r.BillCount</td>
+                                    <td class="text-right">@Fmt(r.GrossAmount)</td>
+                                    <td class="text-right">@Fmt(r.Discount)</td>
+                                    <td class="text-right">@Fmt(r.TaxAmount)</td>
+                                    <td class="text-right"><strong>@Fmt(r.NetAmount)</strong></td>
+                                    <td class="text-right">@Fmt(r.RoundOff)</td>
+                                    <td class="text-right">@Fmt(r.PaidAmount)</td>
+                                    <td class="text-right">@Fmt(r.RefundAmount)</td>
+                                    <td class="text-right">@Fmt(r.Outstanding)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr style="font-weight:700; background:var(--gray-50);">
+                                <td>Total</td>
+                                <td class="text-right">@Model.Rows.Sum(r => r.BillCount)</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.GrossAmount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.Discount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.TaxAmount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.NetAmount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.RoundOff))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.PaidAmount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.RefundAmount))</td>
+                                <td class="text-right">@Fmt(Model.Rows.Sum(r => r.Outstanding))</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.dropdown-wrap')) {
+            document.querySelectorAll('.dropdown-menu.open').forEach(function (m) {
+                m.classList.remove('open');
+            });
+        }
+    });
+</script>

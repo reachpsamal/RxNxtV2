@@ -1,0 +1,185 @@
+@model Rxnxt.Web.ViewModels.SaleDetailsReportViewModel
+@{
+    ViewData["Title"] = "Sale Details Report";
+    string Fmt(decimal v) => v.ToString("0.00");
+}
+
+<div class="stock-report-page">
+    <div class="section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-list-ul"></i>
+                Sale Details Report
+            </div>
+            <span class="section-badge info">@Model.Rows.Count items</span>
+        </div>
+    </div>
+
+    <div class="section-card" style="margin-top:16px;">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-funnel"></i>
+                Filters
+            </div>
+            <a class="btn-ghost" href="@Url.Action("SaleDetailsReport", "Sales")">
+                <i class="bi bi-x-circle"></i> Clear
+            </a>
+        </div>
+        <div class="section-body">
+            <form method="get" asp-action="SaleDetailsReport" asp-controller="Sales">
+                <div class="stock-filter-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                    <div>
+                        <label class="form-label-custom">From</label>
+                        <input type="date" class="pharmacy-input" name="From" value="@Model.Filter.From.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">To</label>
+                        <input type="date" class="pharmacy-input" name="To" value="@Model.Filter.To.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Invoice No</label>
+                        <input type="text" class="pharmacy-input" name="InvoiceNo" value="@Model.Filter.InvoiceNo" placeholder="Search invoice..." />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Customer</label>
+                        <input type="text" class="pharmacy-input" name="CustomerName" value="@Model.Filter.CustomerName" placeholder="Search customer..." />
+                    </div>
+                </div>
+                <div class="stock-filter-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; margin-top:10px;">
+                    <div>
+                        <label class="form-label-custom">Item</label>
+                        <input type="text" class="pharmacy-input" name="ItemName" value="@Model.Filter.ItemName" placeholder="Search item..." />
+                    </div>
+                    <div>
+                        <label class="form-label-custom">User</label>
+                        <select class="pharmacy-input" name="CreatedBy">
+                            <option value="">All</option>
+                            @foreach (var u in Model.Filter.UserOptions)
+                            {
+                                <option value="@u" selected="@(Model.Filter.CreatedBy == u)">@u</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Payment Mode</label>
+                        <select class="pharmacy-input" name="PaymentMode">
+                            <option value="All" selected="@(Model.Filter.PaymentMode == "All" || Model.Filter.PaymentMode == null)">All</option>
+                            <option value="Cash" selected="@(Model.Filter.PaymentMode == "Cash")">Cash</option>
+                            <option value="Card" selected="@(Model.Filter.PaymentMode == "Card")">Card</option>
+                            <option value="UPI" selected="@(Model.Filter.PaymentMode == "UPI")">UPI</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-custom">Bill Status</label>
+                        <select class="pharmacy-input" name="BillStatus">
+                            <option value="All" selected="@(Model.Filter.BillStatus == "All")">All</option>
+                            <option value="Completed" selected="@(Model.Filter.BillStatus == "Completed")">Completed</option>
+                            <option value="Cancelled" selected="@(Model.Filter.BillStatus == "Cancelled")">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="stock-filter-grid" style="margin-top:10px; grid-template-columns: 1fr;">
+                    <div class="stock-filter-action" style="gap:6px; display:flex;">
+                        <button class="btn-primary-pharmacy" type="submit">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <div class="dropdown-wrap">
+                            <button class="btn-secondary-pharmacy dropdown-trigger" type="button" onclick="this.nextElementSibling.classList.toggle('open')">
+                                <i class="bi bi-download"></i> Download <i class="bi bi-chevron-down" style="font-size:10px;"></i>
+                            </button>
+                            <div class="dropdown-menu">
+                                <button class="dropdown-item" type="submit" formaction="@Url.Action("SaleDetailsReportExcel")">
+                                    <i class="bi bi-file-earmark-excel"></i> Excel
+                                </button>
+                                <button class="dropdown-item" type="submit" formaction="@Url.Action("SaleDetailsReportPdf")">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="section-card" style="margin-top:16px;">
+        <div class="section-header">
+            <div class="section-title">
+                <i class="bi bi-table"></i>
+                Sale Details
+            </div>
+        </div>
+        <div class="section-body">
+            @if (Model.Rows.Count == 0)
+            {
+                <div class="empty-cart stock-empty-state">
+                    <i class="bi bi-inboxes"></i>
+                    <p>No data found</p>
+                    <span>Adjust filters to view sale details.</span>
+                </div>
+            }
+            else
+            {
+                <div class="stock-table-wrap">
+                    <table class="stock-report-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice No</th>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th>Mobile</th>
+                                <th>Item</th>
+                                <th>Batch</th>
+                                <th>Expiry</th>
+                                <th class="text-right">Qty</th>
+                                <th class="text-right">Free</th>
+                                <th class="text-right">MRP</th>
+                                <th class="text-right">Rate</th>
+                                <th class="text-right">Disc</th>
+                                <th class="text-right">GST%</th>
+                                <th class="text-right">Tax</th>
+                                <th class="text-right">Net</th>
+                                <th>Payment</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Model.Rows)
+                            {
+                                <tr class="@(r.IsCancelled ? "cancelled" : "")">
+                                    <td><strong>@r.InvoiceNo</strong></td>
+                                    <td>@r.InvoiceDate.ToString("dd-MM-yyyy")</td>
+                                    <td>@r.CustomerName</td>
+                                    <td>@r.Mobile</td>
+                                    <td>@r.ItemName</td>
+                                    <td>@r.Batch</td>
+                                    <td>@r.Expiry</td>
+                                    <td class="text-right">@Fmt(r.Qty)</td>
+                                    <td class="text-right">@Fmt(r.FreeQty)</td>
+                                    <td class="text-right">@Fmt(r.Mrp)</td>
+                                    <td class="text-right">@Fmt(r.Rate)</td>
+                                    <td class="text-right">@Fmt(r.Discount)</td>
+                                    <td class="text-right">@r.GstPercent.ToString("0.##")</td>
+                                    <td class="text-right">@Fmt(r.TaxAmount)</td>
+                                    <td class="text-right"><strong>@Fmt(r.NetAmount)</strong></td>
+                                    <td>@r.PaymentMode</td>
+                                    <td>@r.CreatedBy</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.dropdown-wrap')) {
+            document.querySelectorAll('.dropdown-menu.open').forEach(function (m) {
+                m.classList.remove('open');
+            });
+        }
+    });
+</script>

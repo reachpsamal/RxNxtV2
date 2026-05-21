@@ -1014,6 +1014,13 @@ function completeSale() {
         if (upi > 0) payments.push({ paymentMode: 'UPI', amount: parseFloat(upi.toFixed(2)), reference: upiReference });
     }
 
+    // Calculate roundoff
+    let s = 0, d = 0, t = 0;
+    saleItems.forEach(i => { s += i.price * i.quantity; d += i.discountAmount; t += i.taxAmount || 0; });
+    const addDisc = parseFloat($('#additionalDiscount').val()) || 0;
+    const baseGrand = Math.max(0, s - d - addDisc + t);
+    const roundOff = parseFloat((grandTotal - baseGrand).toFixed(2));
+
     const request = {
         customerId: selectedCustomer?.id || null,
         items: saleItems.map(i => ({
@@ -1029,6 +1036,7 @@ function completeSale() {
             taxPercent: FIXED_TAX_PERCENT
         })),
         additionalDiscount: parseFloat($('#additionalDiscount').val()) || 0,
+        roundOff: roundOff,
         payments: payments
     };
 

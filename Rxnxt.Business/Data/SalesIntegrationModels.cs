@@ -45,6 +45,9 @@ public sealed class SaleHeaderRow
     [Column(TypeName = "decimal(18,2)")]
     public decimal? ExtraLess { get; set; }
 
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? RoundOff { get; set; }
+
     public bool ActiveStatus { get; set; }
 
     [Required]

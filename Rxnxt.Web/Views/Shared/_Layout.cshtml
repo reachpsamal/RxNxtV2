@@ -84,9 +84,13 @@
                     <i class="bi bi-people"></i>
                     <span>Customers</span>
                 </a>
-                <a href="#" class="nav-item" title="Reports">
+                <a asp-controller="Sales" asp-action="Summary" class="nav-item" title="Sale Summary">
                     <i class="bi bi-graph-up"></i>
-                    <span>Reports</span>
+                    <span>Sale Summary</span>
+                </a>
+                <a asp-controller="Sales" asp-action="SaleDetailsReport" class="nav-item" title="Sale Details Report">
+                    <i class="bi bi-list-ul"></i>
+                    <span>Sale Details</span>
                 </a>
                 <a href="#" class="nav-item" title="Settings">
                     <i class="bi bi-gear"></i>

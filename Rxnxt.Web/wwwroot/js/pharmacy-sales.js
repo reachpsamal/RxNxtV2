@@ -1716,6 +1716,16 @@ function completeSale() {
     const inferredSearchPhone = /^\d{4,}$/.test(normalizedSearch) ? normalizedSearch : null;
     const inferredSearchName = inferredSearchPhone ? null : (searchText.length >= 2 ? searchText : null);
 
+    let roundOff = 0;
+    if (!isReturnMode) {
+        let grandTotalBeforeAddDisc = 0;
+        saleItems.forEach(i => { grandTotalBeforeAddDisc += parseFloat(i.baseTotal) || 0; });
+        const addDisc = parseFloat($('#additionalDiscount').val()) || 0;
+        const basePayable = Math.max(0, grandTotalBeforeAddDisc - addDisc);
+        const rounded = roundToNearestRupee(basePayable);
+        roundOff = parseFloat((rounded - basePayable).toFixed(2));
+    }
+
     const request = {
         saleId: editingSaleId || null,
         returnMode: isReturnMode === true,
@@ -1736,6 +1746,7 @@ function completeSale() {
             taxPercent: parseFloat(i.taxPercent) || 0
         })),
         additionalDiscount: parseFloat($('#additionalDiscount').val()) || 0,
+        roundOff: roundOff,
         payments: payments
     };
 

@@ -9,7 +9,9 @@ using System.Globalization;
 using Rxnxt.Web.Pdf;
 using QuestPDF.Fluent;
 using Rxnxt.Business.Data;
+using Rxnxt.Business.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Rxnxt.Web.Controllers
 {
@@ -19,13 +21,15 @@ namespace Rxnxt.Web.Controllers
         private readonly SaleService _saleService;
         private readonly StockService _stockService;
         private readonly PharmacyDbContext _db;
+        private readonly IConfiguration _configuration;
 
-        public SalesController(CustomerService customerService, SaleService saleService, StockService stockService, PharmacyDbContext db)
+        public SalesController(CustomerService customerService, SaleService saleService, StockService stockService, PharmacyDbContext db, IConfiguration configuration)
         {
             _customerService = customerService;
             _saleService = saleService;
             _stockService = stockService;
             _db = db;
+            _configuration = configuration;
         }
 
         public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -215,6 +219,416 @@ namespace Rxnxt.Web.Controllers
             };
 
             return View(vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Summary(SaleSummaryFilterViewModel filter, CancellationToken ct)
+        {
+            _ = ct;
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var storeOptions = await _db.SaleHeaders
+                .Where(h => h.StoreId != null && h.StoreId != "" && h.TenantId == tenantId)
+                .Select(h => h.StoreId!)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync(ct);
+
+            var userOptions = await _db.SaleHeaders
+                .Where(h => h.CreatedBy != null && h.CreatedBy != "" && h.TenantId == tenantId)
+                .Select(h => h.CreatedBy)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync(ct);
+
+            var vm = await GetSummaryDataAsync(filter, from, to, tenantId, ct);
+            vm.Filter.StoreOptions = storeOptions;
+            vm.Filter.UserOptions = userOptions;
+
+            return View(vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SummaryExcel(SaleSummaryFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetSummaryDataAsync(filter, from, to, tenantId, ct);
+            var excelService = new Exports.SaleSummaryExcelService();
+            var bytes = excelService.Generate(vm, filter);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "SaleSummaryReport.xlsx");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SummaryPdf(SaleSummaryFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetSummaryDataAsync(filter, from, to, tenantId, ct);
+            var doc = new Pdf.SaleSummaryPdfDocument(vm, filter);
+            var bytes = doc.GeneratePdf();
+            return File(bytes, "application/pdf", "SaleSummaryReport.pdf");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SaleDetailsReport(SaleDetailsReportFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var userOptions = await _db.SaleHeaders
+                .Where(h => h.CreatedBy != null && h.CreatedBy != "" && h.TenantId == tenantId)
+                .Select(h => h.CreatedBy)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync(ct);
+
+            var vm = await GetSaleDetailsDataAsync(filter, from, to, tenantId, ct);
+            vm.Filter.UserOptions = userOptions;
+            return View(vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SaleDetailsReportExcel(SaleDetailsReportFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetSaleDetailsDataAsync(filter, from, to, tenantId, ct);
+            var excelService = new Exports.SaleDetailsReportExcelService();
+            var bytes = excelService.Generate(vm, filter);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "SaleDetailsReport.xlsx");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> SaleDetailsReportPdf(SaleDetailsReportFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetSaleDetailsDataAsync(filter, from, to, tenantId, ct);
+            var doc = new Pdf.SaleDetailsReportPdfDocument(vm);
+            var bytes = doc.GeneratePdf();
+            return File(bytes, "application/pdf", "SaleDetailsReport.pdf");
+        }
+
+        private async Task<SaleDetailsReportViewModel> GetSaleDetailsDataAsync(SaleDetailsReportFilterViewModel filter, DateTime from, DateTime to, string tenantId, CancellationToken ct)
+        {
+            var headerQuery = _db.SaleHeaders.Where(h => h.TenantId == tenantId && h.BillDate >= from && h.BillDate <= to);
+
+            if (filter.BillStatus == "Completed")
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+            else if (filter.BillStatus == "Cancelled")
+                headerQuery = headerQuery.Where(h => !h.ActiveStatus);
+
+            if (!string.IsNullOrWhiteSpace(filter.InvoiceNo))
+                headerQuery = headerQuery.Where(h => h.BillNo.Contains(filter.InvoiceNo));
+
+            if (!string.IsNullOrWhiteSpace(filter.CreatedBy))
+                headerQuery = headerQuery.Where(h => h.CreatedBy == filter.CreatedBy);
+
+            if (!string.IsNullOrWhiteSpace(filter.PaymentMode) && filter.PaymentMode != "All")
+            {
+                var paymentModeIds = _db.SalePayments
+                    .Where(p => p.PaymentMode == filter.PaymentMode)
+                    .Select(p => p.SaleId);
+                headerQuery = headerQuery.Where(h => paymentModeIds.Contains(h.UniqueID));
+            }
+
+            var materializedHeaders = await headerQuery.ToListAsync(ct);
+            if (materializedHeaders.Count == 0)
+                return new SaleDetailsReportViewModel { Filter = filter };
+
+            var headerUniqueIds = materializedHeaders.Select(h => h.UniqueID).ToList();
+
+            var details = await _db.SaleDetails
+                .Where(d => headerUniqueIds.Contains(d.SaleID))
+                .ToListAsync(ct);
+
+            var customerIds = materializedHeaders.Select(h => h.CustomerID).Distinct().ToList();
+            var customers = await _db.CustomerMasters
+                .Where(c => customerIds.Contains(c.UniqueID))
+                .ToDictionaryAsync(c => c.UniqueID, ct);
+
+            var productIds = details.Select(d => d.ProductID).Distinct().ToList();
+            var products = await _db.ProductMasters
+                .Where(p => productIds.Contains(p.UniqueID))
+                .ToDictionaryAsync(p => p.UniqueID, ct);
+
+            var paymentRaw = await _db.SalePayments
+                .Where(p => headerUniqueIds.Contains(p.SaleId))
+                .GroupBy(p => p.SaleId)
+                .Select(g => new { SaleId = g.Key, Modes = g.Select(p => p.PaymentMode).Distinct() })
+                .ToListAsync(ct);
+            var paymentLookup = paymentRaw.ToDictionary(p => p.SaleId, p => string.Join(", ", p.Modes));
+
+            var headerLookup = materializedHeaders.ToDictionary(h => h.UniqueID);
+
+            var rawRows = new List<SaleDetailsReportRowViewModel>();
+            foreach (var d in details)
+            {
+                if (!headerLookup.TryGetValue(d.SaleID, out var h)) continue;
+
+                if (!string.IsNullOrWhiteSpace(filter.CustomerName))
+                {
+                    customers.TryGetValue(h.CustomerID, out var c);
+                    if (c == null || !c.CustomerName.Contains(filter.CustomerName, StringComparison.OrdinalIgnoreCase)) continue;
+                }
+                if (!string.IsNullOrWhiteSpace(filter.ItemName))
+                {
+                    products.TryGetValue(d.ProductID, out var p);
+                    if (p == null || !p.ProductName.Contains(filter.ItemName, StringComparison.OrdinalIgnoreCase)) continue;
+                }
+
+                customers.TryGetValue(h.CustomerID, out var cust);
+                products.TryGetValue(d.ProductID, out var prod);
+
+                rawRows.Add(new SaleDetailsReportRowViewModel
+                {
+                    HeaderId = h.UniqueID,
+                    InvoiceNo = h.BillNo,
+                    InvoiceDate = h.BillDate,
+                    CustomerName = cust?.CustomerName ?? "",
+                    Mobile = cust?.MobileNumber ?? "",
+                    ItemName = prod?.ProductName ?? "",
+                    Batch = d.BatchNumber ?? "",
+                    Expiry = d.ExpiryDate?.ToString("MMM-yyyy") ?? "",
+                    Qty = d.Qty ?? 0m,
+                    FreeQty = d.FreeQty ?? 0m,
+                    Mrp = d.MRP ?? 0m,
+                    Rate = d.SalePrice ?? 0m,
+                    Discount = d.ItemDiscAmount ?? 0m,
+                    GstPercent = d.TaxPerc ?? 0m,
+                    TaxAmount = d.TotalTaxAmount ?? 0m,
+                    NetAmount = d.ItemTotal ?? 0m,
+                    PaymentMode = paymentLookup.TryGetValue(h.UniqueID, out var pm) ? pm : "",
+                    CreatedBy = h.CreatedBy,
+                    IsCancelled = !h.ActiveStatus
+                });
+            }
+
+            var vm = new SaleDetailsReportViewModel { Filter = filter };
+            vm.Rows = rawRows.OrderBy(r => r.InvoiceDate).ThenBy(r => r.InvoiceNo).ToList();
+            return vm;
+        }
+
+        private async Task<SaleSummaryViewModel> GetSummaryDataAsync(SaleSummaryFilterViewModel filter, DateTime from, DateTime to, string tenantId, CancellationToken ct)
+        {
+            var headerQuery = _db.SaleHeaders.Where(h => h.BillDate >= from && h.BillDate <= to && h.TenantId == tenantId);
+
+            if (!string.IsNullOrWhiteSpace(filter.StoreId))
+                headerQuery = headerQuery.Where(h => h.StoreId == filter.StoreId);
+            if (!string.IsNullOrWhiteSpace(filter.CreatedBy))
+                headerQuery = headerQuery.Where(h => h.CreatedBy == filter.CreatedBy);
+            if (filter.BillStatus == "Completed")
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+            else if (filter.BillStatus == "Cancelled")
+                headerQuery = headerQuery.Where(h => !h.ActiveStatus);
+
+            if (!string.IsNullOrWhiteSpace(filter.PaymentMode) && filter.PaymentMode != "All")
+            {
+                var paymentModeIds = _db.SalePayments
+                    .Where(p => p.PaymentMode == filter.PaymentMode)
+                    .Select(p => p.SaleId);
+                headerQuery = headerQuery.Where(h => paymentModeIds.Contains(h.UniqueID));
+            }
+
+            var vm = new SaleSummaryViewModel { Filter = filter };
+
+            if (filter.GroupBy == "Payment")
+            {
+                var paymentQuery = headerQuery.Join(
+                    _db.SalePayments,
+                    h => h.UniqueID,
+                    p => p.SaleId,
+                    (h, p) => new { h, p });
+
+                var grouped = await paymentQuery
+                    .GroupBy(x => x.p.PaymentMode)
+                    .Select(g => new
+                    {
+                        GroupKey = g.Key,
+                        BillCount = g.Select(x => x.h.ID).Distinct().Count(),
+                        GrossAmount = g.Sum(x => (x.h.BillAmount ?? 0) + (x.h.DiscountAmount ?? 0) + (x.h.ExtraLess ?? 0) - (x.h.RoundOff ?? 0)),
+                        Discount = g.Sum(x => (x.h.DiscountAmount ?? 0) + (x.h.ExtraLess ?? 0)),
+                        TaxAmount = g.Sum(x => x.h.TaxAmount ?? 0),
+                        NetAmount = g.Sum(x => x.h.BillAmount ?? 0),
+                        RoundOff = g.Sum(x => x.h.RoundOff ?? 0),
+                        PaidAmount = g.Sum(x => x.p.Amount)
+                    })
+                    .ToListAsync(ct);
+
+                vm.Rows = grouped.Select(g => new SaleSummaryRowViewModel
+                {
+                    GroupKey = g.GroupKey,
+                    BillCount = g.BillCount,
+                    GrossAmount = g.GrossAmount,
+                    Discount = g.Discount,
+                    TaxAmount = g.TaxAmount,
+                    NetAmount = g.NetAmount,
+                    RoundOff = g.RoundOff,
+                    PaidAmount = g.PaidAmount,
+                    RefundAmount = 0m,
+                    Outstanding = g.NetAmount - g.PaidAmount
+                }).OrderBy(r => r.GroupKey).ToList();
+            }
+            else if (filter.GroupBy == "Month")
+            {
+                var rawHeader = await headerQuery
+                    .GroupBy(h => new { h.BillDate.Year, h.BillDate.Month })
+                    .Select(g => new { g.Key.Year, g.Key.Month, BillCount = g.Count(), GrossAmount = g.Sum(h => (h.BillAmount ?? 0) + (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0) - (h.RoundOff ?? 0)), Discount = g.Sum(h => (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0)), TaxAmount = g.Sum(h => h.TaxAmount ?? 0), NetAmount = g.Sum(h => h.BillAmount ?? 0), RoundOff = g.Sum(h => h.RoundOff ?? 0) })
+                    .ToListAsync(ct);
+
+                var rawPayment = await headerQuery
+                    .Join(_db.SalePayments, h => h.UniqueID, p => p.SaleId, (h, p) => new { h, p })
+                    .GroupBy(x => new { x.h.BillDate.Year, x.h.BillDate.Month })
+                    .Select(g => new { g.Key.Year, g.Key.Month, PaidAmount = g.Sum(x => x.p.Amount) })
+                    .ToListAsync(ct);
+
+                var rawRefund = await _db.SalesReturnHeaders
+                    .Where(r => r.BillDate >= from && r.BillDate <= to && r.ActiveStatus && r.TenantId == tenantId)
+                    .GroupBy(r => new { r.BillDate.Year, r.BillDate.Month })
+                    .Select(g => new { g.Key.Year, g.Key.Month, RefundAmount = g.Sum(r => r.BillAmount ?? 0) })
+                    .ToListAsync(ct);
+
+                var payLookup = rawPayment.ToDictionary(p => $"{p.Year}-{p.Month:D2}");
+                var refLookup = rawRefund.ToDictionary(r => $"{r.Year}-{r.Month:D2}");
+
+                vm.Rows = rawHeader.Select(x =>
+                {
+                    var key = $"{x.Year}-{x.Month:D2}";
+                    var paid = payLookup.TryGetValue(key, out var p) ? p.PaidAmount : 0m;
+                    return new SaleSummaryRowViewModel
+                    {
+                        GroupKey = key,
+                        BillCount = x.BillCount,
+                        GrossAmount = x.GrossAmount,
+                        Discount = x.Discount,
+                        TaxAmount = x.TaxAmount,
+                        NetAmount = x.NetAmount,
+                        RoundOff = x.RoundOff,
+                        PaidAmount = paid,
+                        RefundAmount = refLookup.TryGetValue(key, out var r) ? r.RefundAmount : 0m,
+                        Outstanding = x.NetAmount - paid
+                    };
+                }).OrderBy(r => r.GroupKey).ToList();
+            }
+            else if (filter.GroupBy == "User")
+            {
+                var rawHeader = await headerQuery
+                    .GroupBy(h => h.CreatedBy ?? "Unknown")
+                    .Select(g => new { Key = g.Key, BillCount = g.Count(), GrossAmount = g.Sum(h => (h.BillAmount ?? 0) + (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0) - (h.RoundOff ?? 0)), Discount = g.Sum(h => (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0)), TaxAmount = g.Sum(h => h.TaxAmount ?? 0), NetAmount = g.Sum(h => h.BillAmount ?? 0), RoundOff = g.Sum(h => h.RoundOff ?? 0) })
+                    .ToListAsync(ct);
+
+                var rawPayment = await headerQuery
+                    .Join(_db.SalePayments, h => h.UniqueID, p => p.SaleId, (h, p) => new { h, p })
+                    .GroupBy(x => x.h.CreatedBy ?? "Unknown")
+                    .Select(g => new { Key = g.Key, PaidAmount = g.Sum(x => x.p.Amount) })
+                    .ToListAsync(ct);
+
+                var rawRefund = await _db.SalesReturnHeaders
+                    .Where(r => r.BillDate >= from && r.BillDate <= to && r.ActiveStatus && r.TenantId == tenantId)
+                    .GroupBy(r => r.CreatedBy ?? "Unknown")
+                    .Select(g => new { Key = g.Key, RefundAmount = g.Sum(r => r.BillAmount ?? 0) })
+                    .ToListAsync(ct);
+
+                var payLookup = rawPayment.ToDictionary(p => p.Key);
+                var refLookup = rawRefund.ToDictionary(r => r.Key);
+
+                vm.Rows = rawHeader.Select(x =>
+                {
+                    var paid = payLookup.TryGetValue(x.Key, out var p) ? p.PaidAmount : 0m;
+                    return new SaleSummaryRowViewModel
+                    {
+                        GroupKey = x.Key,
+                        BillCount = x.BillCount,
+                        GrossAmount = x.GrossAmount,
+                        Discount = x.Discount,
+                        TaxAmount = x.TaxAmount,
+                        NetAmount = x.NetAmount,
+                        RoundOff = x.RoundOff,
+                        PaidAmount = paid,
+                        RefundAmount = refLookup.TryGetValue(x.Key, out var r) ? r.RefundAmount : 0m,
+                        Outstanding = x.NetAmount - paid
+                    };
+                }).OrderBy(r => r.GroupKey).ToList();
+            }
+            else // Day
+            {
+                var rawHeader = await headerQuery
+                    .GroupBy(h => h.BillDate.Date)
+                    .Select(g => new { Key = g.Key, BillCount = g.Count(), GrossAmount = g.Sum(h => (h.BillAmount ?? 0) + (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0) - (h.RoundOff ?? 0)), Discount = g.Sum(h => (h.DiscountAmount ?? 0) + (h.ExtraLess ?? 0)), TaxAmount = g.Sum(h => h.TaxAmount ?? 0), NetAmount = g.Sum(h => h.BillAmount ?? 0), RoundOff = g.Sum(h => h.RoundOff ?? 0) })
+                    .ToListAsync(ct);
+
+                var rawPayment = await headerQuery
+                    .Join(_db.SalePayments, h => h.UniqueID, p => p.SaleId, (h, p) => new { h, p })
+                    .GroupBy(x => x.h.BillDate.Date)
+                    .Select(g => new { Key = g.Key, PaidAmount = g.Sum(x => x.p.Amount) })
+                    .ToListAsync(ct);
+
+                var rawRefund = await _db.SalesReturnHeaders
+                    .Where(r => r.BillDate >= from && r.BillDate <= to && r.ActiveStatus && r.TenantId == tenantId)
+                    .GroupBy(r => r.BillDate.Date)
+                    .Select(g => new { Key = g.Key, RefundAmount = g.Sum(r => r.BillAmount ?? 0) })
+                    .ToListAsync(ct);
+
+                var payLookup = rawPayment.ToDictionary(p => p.Key.ToString("yyyy-MM-dd"));
+                var refLookup = rawRefund.ToDictionary(r => r.Key.ToString("yyyy-MM-dd"));
+
+                vm.Rows = rawHeader.Select(x =>
+                {
+                    var key = x.Key.ToString("yyyy-MM-dd");
+                    var paid = payLookup.TryGetValue(key, out var p) ? p.PaidAmount : 0m;
+                    return new SaleSummaryRowViewModel
+                    {
+                        GroupKey = key,
+                        BillCount = x.BillCount,
+                        GrossAmount = x.GrossAmount,
+                        Discount = x.Discount,
+                        TaxAmount = x.TaxAmount,
+                        NetAmount = x.NetAmount,
+                        RoundOff = x.RoundOff,
+                        PaidAmount = paid,
+                        RefundAmount = refLookup.TryGetValue(key, out var r) ? r.RefundAmount : 0m,
+                        Outstanding = x.NetAmount - paid
+                    };
+                }).OrderBy(r => r.GroupKey).ToList();
+            }
+
+            // KPIs (SQL-level aggregates)
+            if (vm.Rows.Count > 0)
+            {
+                vm.TotalBills = vm.Rows.Sum(r => r.BillCount);
+                vm.TotalGrossSales = vm.Rows.Sum(r => r.GrossAmount);
+                var totalNet = vm.Rows.Sum(r => r.NetAmount);
+                vm.AvgBillValue = vm.TotalBills > 0 ? Math.Round(totalNet / vm.TotalBills, 2) : 0m;
+
+                if (filter.GroupBy != "Payment")
+                {
+                    var paymentKpiQuery = headerQuery
+                        .Join(_db.SalePayments, h => h.UniqueID, p => p.SaleId, (h, p) => p);
+                    vm.CashAmount = await paymentKpiQuery.Where(p => p.PaymentMode == "Cash").SumAsync(p => p.Amount, ct);
+                    vm.UpiAmount = await paymentKpiQuery.Where(p => p.PaymentMode == "UPI").SumAsync(p => p.Amount, ct);
+                    vm.CardAmount = await paymentKpiQuery.Where(p => p.PaymentMode == "Card").SumAsync(p => p.Amount, ct);
+                    vm.OtherAmount = await paymentKpiQuery.Where(p => p.PaymentMode != "Cash" && p.PaymentMode != "UPI" && p.PaymentMode != "Card").SumAsync(p => p.Amount, ct);
+                }
+
+                vm.TotalRefunds = await _db.SalesReturnHeaders
+                    .Where(r => r.BillDate >= from && r.BillDate <= to && r.ActiveStatus && r.TenantId == tenantId)
+                    .SumAsync(r => r.BillAmount ?? 0m, ct);
+                vm.ReturnPercentage = vm.TotalGrossSales > 0 ? Math.Round(vm.TotalRefunds / vm.TotalGrossSales * 100, 2) : 0m;
+            }
+
+            return vm;
         }
 
         [HttpPost]

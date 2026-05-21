@@ -33,6 +33,10 @@ namespace Rxnxt.Business.Interfaces
         Task<List<Sale>> GetRecentSalesAsync(int count = 10);
         Task<List<Sale>> SearchSalesAsync(DateTime from, DateTime to, string? q);
         Task<bool> CancelSaleAsync(int id);
+        Task<SaleSummaryKpiDto> GetSaleSummaryKpiAsync(SaleSummaryRequest request);
+        Task<List<SaleSummaryRowDto>> GetSaleSummaryRowsAsync(SaleSummaryRequest request);
+        Task<List<string>> GetDistinctStoresAsync();
+        Task<List<string>> GetDistinctUsersAsync();
     }
 
     public interface ISupplierRepository

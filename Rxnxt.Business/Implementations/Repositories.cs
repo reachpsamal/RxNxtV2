@@ -1211,7 +1211,7 @@ namespace Rxnxt.Business.Implementations
                         header.BillAmount = grandTotal;
                         header.TaxAmount = totalTax;
                         header.DiscountAmount = discountAmount;
-                        header.ExtraAdd = 0;
+                        header.RoundOff = request.RoundOff;
                         header.ExtraLess = request.AdditionalDiscount;
                         header.ActiveStatus = true;
                         header.ModifiedBy = createdBy;
@@ -1240,7 +1240,7 @@ namespace Rxnxt.Business.Implementations
                             BillAmount = grandTotal,
                             TaxAmount = totalTax,
                             DiscountAmount = discountAmount,
-                            ExtraAdd = 0,
+                            RoundOff = request.RoundOff,
                             ExtraLess = request.AdditionalDiscount,
                             ActiveStatus = true,
                             CreatedBy = createdBy,
@@ -2015,6 +2015,185 @@ namespace Rxnxt.Business.Implementations
             sale.PaymentStatus = "Cancelled";
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<List<SaleSummaryRowDto>> GetSaleSummaryRowsAsync(SaleSummaryRequest request)
+        {
+            var headerQuery = _context.SaleHeaders
+                .Where(h => h.BillDate >= request.From && h.BillDate <= request.To.AddDays(1));
+
+            if (!string.IsNullOrWhiteSpace(request.StoreId))
+                headerQuery = headerQuery.Where(h => h.StoreId == request.StoreId);
+            if (!string.IsNullOrWhiteSpace(request.CreatedBy))
+                headerQuery = headerQuery.Where(h => h.CreatedBy == request.CreatedBy);
+            if (request.BillStatus == "Completed")
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+            else if (request.BillStatus == "Cancelled")
+                headerQuery = headerQuery.Where(h => !h.ActiveStatus);
+
+            var headers = await headerQuery.ToListAsync();
+            if (headers.Count == 0) return new();
+
+            var uniqueIds = headers.Select(h => h.UniqueID).ToHashSet();
+
+            var payments = await _context.SalePayments
+                .Where(p => uniqueIds.Contains(p.SaleId))
+                .ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(request.PaymentMode) && request.PaymentMode != "All")
+            {
+                var matchingIds = payments
+                    .Where(p => p.PaymentMode == request.PaymentMode)
+                    .Select(p => p.SaleId)
+                    .Distinct()
+                    .ToHashSet();
+                headers = headers.Where(h => matchingIds.Contains(h.UniqueID)).ToList();
+                uniqueIds = headers.Select(h => h.UniqueID).ToHashSet();
+                payments = payments.Where(p => uniqueIds.Contains(p.SaleId)).ToList();
+            }
+
+            var refunds = await _context.SalesReturnHeaders
+                .Where(r => r.BillDate >= request.From && r.BillDate <= request.To.AddDays(1)
+                            && r.ActiveStatus && r.SaleId != null && uniqueIds.Contains(r.SaleId))
+                .ToListAsync();
+            var refundLookup = refunds.GroupBy(r => r.SaleId!).ToDictionary(g => g.Key, g => g.Sum(r => r.BillAmount ?? 0m));
+            var paymentLookup = payments.GroupBy(p => p.SaleId).ToDictionary(g => g.Key, g => g.ToList());
+
+            IEnumerable<(string Key, SaleHeaderRow Header)> expanded;
+
+            if (request.GroupBy == "Payment")
+            {
+                var distinctModes = payments.Select(p => p.PaymentMode).Distinct().OrderBy(m => m).ToList();
+                expanded = distinctModes.SelectMany(mode =>
+                    headers.Where(h => paymentLookup.TryGetValue(h.UniqueID, out var hp) && hp.Any(p => p.PaymentMode == mode))
+                           .Select(h => (mode, h)));
+            }
+            else
+            {
+                expanded = headers.Select(h =>
+                {
+                    var key = request.GroupBy switch
+                    {
+                        "Month" => h.BillDate.ToString("yyyy-MM"),
+                        "User" => h.CreatedBy ?? "Unknown",
+                        _ => h.BillDate.ToString("yyyy-MM-dd")
+                    };
+                    return (key, h);
+                });
+            }
+
+            var rows = expanded
+                .GroupBy(x => x.Key)
+                .Select(g =>
+                {
+                    var list = g.ToList();
+                    var net = list.Sum(x => x.Header.BillAmount ?? 0m);
+                    var disc = list.Sum(x => (x.Header.DiscountAmount ?? 0m) + (x.Header.ExtraLess ?? 0m));
+                    var paid = list.Sum(x =>
+                        paymentLookup.TryGetValue(x.Header.UniqueID, out var hp) ? hp.Sum(p => p.Amount) : 0m);
+                    var refund = list.Sum(x => refundLookup.TryGetValue(x.Header.UniqueID, out var r) ? r : 0m);
+
+                    return new SaleSummaryRowDto
+                    {
+                        GroupKey = g.Key,
+                        BillCount = list.Count,
+                        GrossAmount = list.Sum(x => (x.Header.BillAmount ?? 0m) + (x.Header.DiscountAmount ?? 0m) + (x.Header.ExtraLess ?? 0m) - (x.Header.RoundOff ?? 0m)),
+                        Discount = disc,
+                        TaxAmount = list.Sum(x => x.Header.TaxAmount ?? 0m),
+                        NetAmount = net,
+                        RoundOff = list.Sum(x => x.Header.RoundOff ?? 0m),
+                        PaidAmount = paid,
+                        RefundAmount = refund,
+                        Outstanding = net - paid
+                    };
+                })
+                .OrderBy(r => r.GroupKey)
+                .ToList();
+
+            return rows;
+        }
+
+        public async Task<SaleSummaryKpiDto> GetSaleSummaryKpiAsync(SaleSummaryRequest request)
+        {
+            var headerQuery = _context.SaleHeaders
+                .Where(h => h.BillDate >= request.From && h.BillDate <= request.To.AddDays(1));
+
+            if (!string.IsNullOrWhiteSpace(request.StoreId))
+                headerQuery = headerQuery.Where(h => h.StoreId == request.StoreId);
+            if (!string.IsNullOrWhiteSpace(request.CreatedBy))
+                headerQuery = headerQuery.Where(h => h.CreatedBy == request.CreatedBy);
+            if (request.BillStatus == "Completed")
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+            else if (request.BillStatus == "Cancelled")
+                headerQuery = headerQuery.Where(h => !h.ActiveStatus);
+
+            var headers = await headerQuery.ToListAsync();
+            if (headers.Count == 0) return new();
+
+            var uniqueIds = headers.Select(h => h.UniqueID).ToHashSet();
+
+            var payments = await _context.SalePayments
+                .Where(p => uniqueIds.Contains(p.SaleId))
+                .ToListAsync();
+
+            if (!string.IsNullOrWhiteSpace(request.PaymentMode) && request.PaymentMode != "All")
+            {
+                var matchingIds = payments
+                    .Where(p => p.PaymentMode == request.PaymentMode)
+                    .Select(p => p.SaleId)
+                    .Distinct()
+                    .ToHashSet();
+                headers = headers.Where(h => matchingIds.Contains(h.UniqueID)).ToList();
+                uniqueIds = headers.Select(h => h.UniqueID).ToHashSet();
+                payments = payments.Where(p => uniqueIds.Contains(p.SaleId)).ToList();
+            }
+
+            var totalBills = headers.Count;
+            var totalGross = headers.Sum(h => (h.BillAmount ?? 0m) + (h.DiscountAmount ?? 0m) + (h.ExtraLess ?? 0m) - (h.RoundOff ?? 0m));
+            var totalNet = headers.Sum(h => h.BillAmount ?? 0m);
+            var avgBill = totalBills > 0 ? totalNet / totalBills : 0m;
+            var cash = payments.Where(p => p.PaymentMode == "Cash").Sum(p => p.Amount);
+            var upi = payments.Where(p => p.PaymentMode == "UPI").Sum(p => p.Amount);
+            var card = payments.Where(p => p.PaymentMode == "Card").Sum(p => p.Amount);
+            var other = payments.Where(p => p.PaymentMode != "Cash" && p.PaymentMode != "UPI" && p.PaymentMode != "Card").Sum(p => p.Amount);
+
+            var totalRefunds = await _context.SalesReturnHeaders
+                .Where(r => r.BillDate >= request.From && r.BillDate <= request.To.AddDays(1) && r.ActiveStatus)
+                .SumAsync(r => r.BillAmount ?? 0m);
+            var returnPerc = totalGross > 0 ? Math.Round(totalRefunds / totalGross * 100, 2) : 0m;
+
+            return new SaleSummaryKpiDto
+            {
+                TotalBills = totalBills,
+                AvgBillValue = Math.Round(avgBill, 2),
+                CashAmount = cash,
+                UpiAmount = upi,
+                CardAmount = card,
+                OtherAmount = other,
+                TotalGrossSales = totalGross,
+                TotalRefunds = totalRefunds,
+                ReturnPercentage = returnPerc
+            };
+        }
+
+        public async Task<List<string>> GetDistinctStoresAsync()
+        {
+            return await _context.SaleHeaders
+                .Where(h => h.StoreId != null && h.StoreId != "")
+                .Select(h => h.StoreId!)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
+        }
+
+        public async Task<List<string>> GetDistinctUsersAsync()
+        {
+            return await _context.SaleHeaders
+                .Where(h => h.CreatedBy != null && h.CreatedBy != "")
+                .Select(h => h.CreatedBy)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
         }
     }
 }

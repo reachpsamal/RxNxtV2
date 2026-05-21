@@ -1251,6 +1251,82 @@ body {
     transform: translateY(0);
 }
 
+.btn-secondary-pharmacy {
+    background: white;
+    color: var(--gray-600);
+    border: 1px solid var(--gray-300);
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-secondary-pharmacy:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-400);
+    color: var(--gray-800);
+}
+
+.dropdown-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.dropdown-trigger {
+    cursor: pointer;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 140px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.dropdown-menu.open {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--gray-700);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.dropdown-item i {
+    font-size: 1rem;
+}
+
 .btn-success-pharmacy {
     background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
     color: white;
@@ -1835,4 +1911,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--gray-400);
+}
+
+.stock-report-table tbody tr.cancelled {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+}
+
+.stock-report-table tbody tr.cancelled td {
+    color: #991b1b;
 }
