@@ -321,6 +321,60 @@ namespace Rxnxt.Web.Controllers
             return File(bytes, "application/pdf", "SaleDetailsReport.pdf");
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ItemWise(ItemWiseFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var storeOptions = await _db.SaleHeaders
+                .Where(h => h.StoreId != null && h.StoreId != "" && h.TenantId == tenantId)
+                .Select(h => h.StoreId!)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync(ct);
+
+            var userOptions = await _db.SaleHeaders
+                .Where(h => h.CreatedBy != null && h.CreatedBy != "" && h.TenantId == tenantId)
+                .Select(h => h.CreatedBy)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync(ct);
+
+            var vm = await GetItemWiseDataAsync(filter, from, to, tenantId, ct);
+            vm.Filter.StoreOptions = storeOptions;
+            vm.Filter.UserOptions = userOptions;
+
+            return View(vm);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ItemWiseExcel(ItemWiseFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetItemWiseDataAsync(filter, from, to, tenantId, ct);
+            var excelService = new Exports.ItemWiseReportExcelService();
+            var bytes = excelService.Generate(vm, filter);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ItemWiseReport.xlsx");
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ItemWisePdf(ItemWiseFilterViewModel filter, CancellationToken ct)
+        {
+            var from = filter.From.Date;
+            var to = filter.To.Date.AddDays(1);
+            var tenantId = _configuration["SalesIntegration:TenantId"]!;
+
+            var vm = await GetItemWiseDataAsync(filter, from, to, tenantId, ct);
+            var doc = new Pdf.ItemWiseReportPdfDocument(vm);
+            var bytes = doc.GeneratePdf();
+            return File(bytes, "application/pdf", "ItemWiseReport.pdf");
+        }
+
         private async Task<SaleDetailsReportViewModel> GetSaleDetailsDataAsync(SaleDetailsReportFilterViewModel filter, DateTime from, DateTime to, string tenantId, CancellationToken ct)
         {
             var headerQuery = _db.SaleHeaders.Where(h => h.TenantId == tenantId && h.BillDate >= from && h.BillDate <= to);
@@ -626,6 +680,222 @@ namespace Rxnxt.Web.Controllers
                     .Where(r => r.BillDate >= from && r.BillDate <= to && r.ActiveStatus && r.TenantId == tenantId)
                     .SumAsync(r => r.BillAmount ?? 0m, ct);
                 vm.ReturnPercentage = vm.TotalGrossSales > 0 ? Math.Round(vm.TotalRefunds / vm.TotalGrossSales * 100, 2) : 0m;
+            }
+
+            return vm;
+        }
+
+        private async Task<ItemWiseReportViewModel> GetItemWiseDataAsync(ItemWiseFilterViewModel filter, DateTime from, DateTime to, string tenantId, CancellationToken ct)
+        {
+            var vm = new ItemWiseReportViewModel { Filter = filter };
+
+            var headerQuery = _db.SaleHeaders.Where(h => h.TenantId == tenantId && h.BillDate >= from && h.BillDate <= to);
+
+            if (!string.IsNullOrWhiteSpace(filter.StoreId))
+                headerQuery = headerQuery.Where(h => h.StoreId == filter.StoreId);
+            if (!string.IsNullOrWhiteSpace(filter.CreatedBy))
+                headerQuery = headerQuery.Where(h => h.CreatedBy == filter.CreatedBy);
+            if (filter.BillStatus == "Completed")
+                headerQuery = headerQuery.Where(h => h.ActiveStatus);
+            else if (filter.BillStatus == "Cancelled")
+                headerQuery = headerQuery.Where(h => !h.ActiveStatus);
+
+            var headers = await headerQuery.ToListAsync(ct);
+            if (headers.Count == 0) return vm;
+
+            var headerIds = headers.Select(h => h.UniqueID).ToHashSet();
+            var headerLookup = headers.ToDictionary(h => h.UniqueID);
+
+            var details = await _db.SaleDetails
+                .Where(d => headerIds.Contains(d.SaleID))
+                .ToListAsync(ct);
+
+            if (details.Count == 0) return vm;
+
+            var nearExpiryKeys = new HashSet<string>();
+            var groupedRaw = details
+                .GroupBy(d => new
+                {
+                    ProductID = d.ProductID ?? "",
+                    Batch = d.BatchNumber ?? "",
+                    ExpiryKey = d.ExpiryDate?.ToString("yyyy-MM-dd") ?? "",
+                    ExpiryDate = d.ExpiryDate
+                })
+                .Select(g =>
+                {
+                    foreach (var d in g)
+                    {
+                        if (d.ExpiryDate.HasValue && headerLookup.TryGetValue(d.SaleID, out var h))
+                        {
+                            if ((d.ExpiryDate.Value - h.BillDate).TotalDays <= 90)
+                            {
+                                nearExpiryKeys.Add($"{g.Key.ProductID}|{g.Key.Batch}|{g.Key.ExpiryKey}");
+                                break;
+                            }
+                        }
+                    }
+
+                    return new
+                    {
+                        g.Key.ProductID,
+                        g.Key.Batch,
+                        g.Key.ExpiryDate,
+                        QtySold = g.Sum(d => d.Qty ?? 0m),
+                        FreeQty = g.Sum(d => d.FreeQty ?? 0m),
+                        PurchaseCost = g.Sum(d => (d.Qty ?? 0m) * (d.PurchasePrice ?? 0m)),
+                        SaleValue = g.Sum(d => d.ItemTotal ?? 0m),
+                        SalePrice = g.Max(d => d.SalePrice ?? 0m),
+                        MRP = g.Max(d => d.MRP ?? 0m)
+                    };
+                })
+                .ToList();
+
+            var productIds = groupedRaw.Select(g => g.ProductID).Distinct().ToList();
+            var products = await _db.ProductMasters
+                .Where(p => productIds.Contains(p.UniqueID))
+                .ToDictionaryAsync(p => p.UniqueID, p => p.ProductName ?? "", ct);
+
+            var stockRows = await _db.ProductStockView
+                .Where(s => productIds.Contains(s.ProductID) && s.TenantId == tenantId)
+                .ToListAsync(ct);
+
+            var stockLookup = stockRows
+                .GroupBy(s => $"{s.ProductID}|{s.BatchNumber ?? ""}|{s.ExpiryDate?.ToString("yyyy-MM-dd") ?? ""}")
+                .ToDictionary(g => g.Key, g =>
+                {
+                    var first = g.First();
+                    return new
+                    {
+                        Manufacturer = first.ManufacturerName ?? "",
+                        Stock = g.Sum(s => s.AvailableQty ?? 0m)
+                    };
+                });
+
+            var nearExpiryRows = new List<ItemWiseRowViewModel>();
+            var rawRows = new List<ItemWiseRowViewModel>();
+
+            foreach (var g in groupedRaw)
+            {
+                var expiryKey = $"{g.ProductID}|{g.Batch}|{g.ExpiryDate?.ToString("yyyy-MM-dd") ?? ""}";
+                stockLookup.TryGetValue(expiryKey, out var stockInfo);
+                products.TryGetValue(g.ProductID, out var productName);
+
+                var saleValue = g.SaleValue;
+                var purchaseCost = g.PurchaseCost;
+                var profit = saleValue - purchaseCost;
+
+                var row = new ItemWiseRowViewModel
+                {
+                    ItemCode = g.ProductID,
+                    ItemName = productName ?? "",
+                    Manufacturer = stockInfo?.Manufacturer ?? "",
+                    Batch = g.Batch,
+                    Expiry = g.ExpiryDate?.ToString("MMM-yyyy") ?? "",
+                    QtySold = g.QtySold,
+                    FreeQty = g.FreeQty,
+                    PurchaseCost = purchaseCost,
+                    SaleValue = saleValue,
+                    Profit = profit,
+                    MarginPerc = saleValue > 0 ? Math.Round(profit / saleValue * 100, 2) : 0m,
+                    CurrentStock = stockInfo?.Stock ?? 0m,
+                    SalePrice = g.SalePrice,
+                    MRP = g.MRP
+                };
+
+                if (!string.IsNullOrWhiteSpace(filter.Manufacturer) &&
+                    !row.Manufacturer.Contains(filter.Manufacturer, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(filter.Batch) &&
+                    !row.Batch.Contains(filter.Batch, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (filter.ExpiryFrom.HasValue && g.ExpiryDate.HasValue && g.ExpiryDate.Value < filter.ExpiryFrom.Value)
+                    continue;
+
+                if (filter.ExpiryTo.HasValue && g.ExpiryDate.HasValue && g.ExpiryDate.Value > filter.ExpiryTo.Value)
+                    continue;
+
+                if (nearExpiryKeys.Contains(expiryKey))
+                    nearExpiryRows.Add(row);
+
+                rawRows.Add(row);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.MovementType) && filter.MovementType != "All" && filter.MovementThreshold.HasValue)
+            {
+                var productQty = rawRows
+                    .GroupBy(r => r.ItemCode)
+                    .ToDictionary(g => g.Key, g => g.Sum(r => r.QtySold));
+
+                var threshold = filter.MovementThreshold.Value;
+                rawRows = rawRows.Where(r =>
+                {
+                    var total = productQty.TryGetValue(r.ItemCode, out var t) ? t : 0m;
+                    return filter.MovementType == "Fast" ? total > threshold : total <= threshold;
+                }).ToList();
+            }
+
+            vm.Rows = rawRows.OrderBy(r => r.ItemName).ThenBy(r => r.Batch).ToList();
+            vm.NearExpiryCount = nearExpiryRows.Count;
+            vm.NearExpiryItems = nearExpiryRows;
+
+            var topProductCodes = rawRows
+                .GroupBy(r => r.ItemCode)
+                .Select(g => new { ItemCode = g.Key, TotalQty = g.Sum(r => r.QtySold) })
+                .OrderByDescending(x => x.TotalQty)
+                .Take(20)
+                .Select(x => x.ItemCode)
+                .ToHashSet();
+
+            vm.Top20 = rawRows.Where(r => topProductCodes.Contains(r.ItemCode)).ToList();
+
+            var allStockWithStock = await _db.ProductStockView
+                .Where(s => s.TenantId == tenantId && (s.AvailableQty ?? 0) > 0)
+                .OrderByDescending(s => s.AvailableQty)
+                .Take(2000)
+                .ToListAsync(ct);
+
+            var soldKeys = new HashSet<string>(groupedRaw.Select(g =>
+                $"{g.ProductID}|{g.Batch}|{g.ExpiryDate?.ToString("yyyy-MM-dd") ?? ""}"));
+
+            var deadStockItems = allStockWithStock
+                .Where(s => !soldKeys.Contains($"{s.ProductID}|{s.BatchNumber ?? ""}|{s.ExpiryDate?.ToString("yyyy-MM-dd") ?? ""}"))
+                .Select(s => new DeadStockViewModel
+                {
+                    ItemCode = s.ProductID ?? "",
+                    ItemName = s.ProductName ?? "",
+                    Manufacturer = s.ManufacturerName ?? "",
+                    Batch = s.BatchNumber ?? "",
+                    Expiry = s.ExpiryDate?.ToString("MMM-yyyy") ?? "",
+                    CurrentStock = s.AvailableQty ?? 0
+                })
+                .ToList();
+
+            vm.DeadStockItems = deadStockItems;
+
+            var productSaleValues = rawRows
+                .GroupBy(r => r.ItemCode)
+                .Select(g => new { ItemCode = g.Key, TotalValue = g.Sum(r => r.SaleValue) })
+                .OrderByDescending(x => x.TotalValue)
+                .ToList();
+
+            var grandTotal = productSaleValues.Sum(x => x.TotalValue);
+            if (grandTotal > 0)
+            {
+                decimal cumulative = 0;
+                int aCount = 0, bCount = 0, cCount = 0;
+                foreach (var item in productSaleValues)
+                {
+                    cumulative += item.TotalValue;
+                    var pct = cumulative / grandTotal * 100;
+                    if (pct <= 80m) aCount++;
+                    else if (pct <= 95m) bCount++;
+                    else cCount++;
+                }
+                vm.AbcA = aCount;
+                vm.AbcB = bCount;
+                vm.AbcC = cCount;
             }
 
             return vm;

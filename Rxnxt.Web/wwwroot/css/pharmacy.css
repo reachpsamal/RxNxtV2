@@ -1747,6 +1747,15 @@ body {
 }
 
 /* ============================== */
+/* ANALYTICS DETAIL SECTIONS     */
+/* ============================== */
+.analytics-detail {
+    margin-top: 12px;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+    padding-top: 12px;
+}
+
+/* ============================== */
 /* BATCH INFO CARD               */
 /* ============================== */
 .batch-info-card {
