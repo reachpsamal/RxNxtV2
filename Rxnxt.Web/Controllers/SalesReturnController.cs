@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Rxnxt.Business.Data;
@@ -5,6 +6,7 @@ using Rxnxt.Web.ViewModels;
 
 namespace Rxnxt.Web.Controllers;
 
+[Authorize]
 public sealed class SalesReturnController : Controller
 {
     private readonly PharmacyDbContext _db;

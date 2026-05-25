@@ -1,0 +1,94 @@
+@model Rxnxt.Web.ViewModels.LoginViewModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - PharmaCare POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/pharmacy.css" />
+</head>
+<body class="login-page">
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="login-brand-icon">
+                    <i class="bi bi-capsule"></i>
+                </div>
+                <h2>PharmaCare</h2>
+                @* <p class="login-subtitle">Pharmacy Sales Management</p> *@
+            </div>
+
+            <form asp-action="Login" asp-controller="Auth" method="post" class="login-form" autocomplete="off" onsubmit="handleLoginSubmit()">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="ReturnUrl" />
+
+                <div class="form-group">
+                    <label asp-for="UserName" class="form-label">
+                        <i class="bi bi-person"></i> Username
+                    </label>
+                    <input asp-for="UserName" class="form-control" placeholder="Enter your username" autofocus />
+                    <span asp-validation-for="UserName" class="field-validation-error"></span>
+                </div>
+
+                <div class="form-group">
+                    <label asp-for="Password" class="form-label">
+                        <i class="bi bi-lock"></i> Password
+                    </label>
+                    <div class="password-toggle-wrapper">
+                        <input asp-for="Password" class="form-control" placeholder="Enter your password" />
+                        <button type="button" class="password-toggle-btn" onclick="togglePassword()" tabindex="-1">
+                            <i class="bi bi-eye" id="passwordIcon"></i>
+                        </button>
+                    </div>
+                    <span asp-validation-for="Password" class="field-validation-error"></span>
+                </div>
+
+                <div class="form-group form-check">
+                    <input asp-for="RememberMe" class="form-check-input" />
+                    <label asp-for="RememberMe" class="form-check-label">Remember me</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary login-btn" id="loginBtn">
+                    <i class="bi bi-box-arrow-in-right me-1" id="loginBtnIcon"></i>
+                    <span class="spinner-pharmacy" id="loginBtnSpinner" style="display:none;vertical-align:middle;margin-right:4px;"></span>
+                    Sign In
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>&copy; @DateTime.Now.Year PharmaCare. All rights reserved.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function togglePassword() {
+            var input = document.getElementById('Password');
+            var icon = document.getElementById('passwordIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'bi bi-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'bi bi-eye';
+            }
+        }
+
+        function handleLoginSubmit() {
+            document.getElementById('loginBtnIcon').style.display = 'none';
+            document.getElementById('loginBtnSpinner').style.display = 'inline-block';
+            document.getElementById('loginBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>

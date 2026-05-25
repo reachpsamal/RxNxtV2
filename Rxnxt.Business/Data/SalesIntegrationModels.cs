@@ -469,6 +469,52 @@ public sealed class GrnHeaderRow
     public decimal? TotalBeforeRoundOff { get; set; }
 }
 
+[Table("UserMaster")]
+public sealed class UserMasterRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [StringLength(50)]
+    public string? UserID { get; set; }
+
+    [StringLength(100)]
+    public string? UserName { get; set; }
+
+    [StringLength(500)]
+    public string? Password { get; set; }
+
+    [StringLength(100)]
+    public string? FirstName { get; set; }
+
+    [StringLength(100)]
+    public string? LastName { get; set; }
+
+    [StringLength(20)]
+    public string? MobileNumber { get; set; }
+
+    [StringLength(50)]
+    public string? UserGroup { get; set; }
+
+    [StringLength(500)]
+    public string? Address { get; set; }
+
+    public bool ActiveStatus { get; set; }
+
+    [StringLength(50)]
+    public string? CreatedBy { get; set; }
+
+    public DateTime CreatedDate { get; set; }
+
+    [StringLength(50)]
+    public string? ModifiedBy { get; set; }
+
+    public DateTime? ModifiedDate { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+}
+
 [Table("GRNDetail")]
 public sealed class GrnDetailRow
 {

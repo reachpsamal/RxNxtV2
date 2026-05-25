@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Rxnxt.Web.ViewModels;
 using Rxnxt.Services.Implementations;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Rxnxt.Web.Controllers
 {
+    [Authorize]
     public class SalesController : Controller
     {
         private readonly CustomerService _customerService;

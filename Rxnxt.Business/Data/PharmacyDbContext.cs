@@ -30,6 +30,8 @@ namespace Rxnxt.Business.Data
         public DbSet<UomMasterRow> UomMasters { get; set; }
         public DbSet<CustomerMasterRow> CustomerMasters { get; set; }
 
+        public DbSet<UserMasterRow> UserMasters { get; set; }
+
         public DbSet<SupplierMasterRow> SupplierMasters { get; set; }
 
         public DbSet<ProductStockRow> ProductStocks { get; set; }
@@ -54,6 +56,7 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<CustomerMasterRow>().ToTable("CustomerMaster");
             modelBuilder.Entity<ProductStockRow>().ToTable("ProductStock");
             modelBuilder.Entity<ProductStockViewRow>().HasNoKey().ToView("VWGetProductStock", "dbo");
+            modelBuilder.Entity<UserMasterRow>().ToTable("UserMaster");
             modelBuilder.Entity<SupplierMasterRow>().ToTable("SupplierMaster");
             modelBuilder.Entity<GrnHeaderRow>().ToTable("GRNHeader");
             modelBuilder.Entity<GrnDetailRow>().ToTable("GRNDetail");

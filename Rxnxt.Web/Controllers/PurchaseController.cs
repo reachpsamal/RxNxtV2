@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Rxnxt.Services.Implementations;
 using Rxnxt.Web.ViewModels;
@@ -6,6 +7,7 @@ using System.Threading;
 
 namespace Rxnxt.Web.Controllers
 {
+    [Authorize]
     public sealed class PurchaseController : Controller
     {
         private readonly StockService _stockService;

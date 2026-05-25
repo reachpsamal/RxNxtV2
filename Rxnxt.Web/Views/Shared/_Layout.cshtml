@@ -43,13 +43,19 @@
                 </div>
             </div>
             <div class="header-right">
-                <div class="header-stat">
-                    <i class="bi bi-receipt"></i>
-                    <span>Today's Sales</span>
-                </div>
-                <div class="user-avatar" title="Pharmacist">
-                    <i class="bi bi-person-circle"></i>
-                </div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <span class="header-user-name">
+                        <i class="bi bi-person-circle"></i>
+                        @(User.FindFirst("FullName")?.Value ?? User.Identity.Name)
+                    </span>
+                    <form asp-controller="Auth" asp-action="Logout" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-light ms-2" title="Logout">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </form>
+                }
             </div>
         </div>
     </header>
@@ -58,6 +64,10 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <nav class="sidebar-nav">
+                <a asp-controller="Dashboard" asp-action="Index" class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "active" : "")" title="Dashboard">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
                 <a href="@Url.Action("Index", "Sales")" class="nav-item @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" && ViewContext.RouteData.Values["controller"]?.ToString() == "Sales" ? "active" : "")" title="New Sale">
                     <i class="bi bi-cart-plus"></i>
                     <span>New Sale</span>

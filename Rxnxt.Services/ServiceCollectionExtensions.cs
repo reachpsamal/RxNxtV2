@@ -9,6 +9,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<CustomerService>();
         services.AddScoped<SaleService>();
+        services.AddScoped<AuthService>();
+        services.AddScoped<DashboardService>();
         return services;
     }
 }
