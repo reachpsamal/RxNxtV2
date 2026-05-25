@@ -1,0 +1,33 @@
+@{
+    Layout = null;
+    var pdfUrl = Url.Action("Pdf", "Bill", new { billType = ViewBag.BillType, uniqueId = ViewBag.UniqueId, copy = ViewBag.Copy });
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Print Bill</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        embed { width: 100%; height: 100vh; border: none; }
+        .no-print { display: none; }
+    </style>
+</head>
+<body>
+    <embed src="@pdfUrl" type="application/pdf" />
+    <script>
+        window.onload = function () {
+            setTimeout(function () {
+                window.print();
+            }, 500);
+        };
+        window.onafterprint = function () {
+            setTimeout(function () {
+                window.close();
+            }, 200);
+        };
+    </script>
+</body>
+</html>

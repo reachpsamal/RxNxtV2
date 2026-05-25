@@ -60,6 +60,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 // External API services
 builder.Services.AddHttpClient<StockService>();
+builder.Services.AddHttpClient("BillApi");
 
  // Register Logging
 builder.Services.AddRxnxtLogging();

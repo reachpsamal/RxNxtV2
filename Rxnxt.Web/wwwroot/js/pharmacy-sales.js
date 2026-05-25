@@ -1834,7 +1834,7 @@ $(function () {
 function printLastBill() {
     const saleId = window.__lastCompletedSaleId;
     if (!saleId) return;
-    window.open(`${MVC_BASE}/Pdf?id=${encodeURIComponent(saleId)}`, '_blank');
+    window.open(`/Bill/Print?billType=Sale&id=${encodeURIComponent(saleId)}`, '_blank');
 }
 
 function startNewSale() {
