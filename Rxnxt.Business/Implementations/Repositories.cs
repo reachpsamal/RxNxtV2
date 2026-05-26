@@ -675,10 +675,12 @@ namespace Rxnxt.Business.Implementations
     {
         private readonly PharmacyDbContext _context;
         private readonly IConfiguration _configuration;
-        public SaleRepository(PharmacyDbContext context, IConfiguration configuration)
+        private readonly ITenantProvider _tenantProvider;
+        public SaleRepository(PharmacyDbContext context, IConfiguration configuration, ITenantProvider tenantProvider)
         {
             _context = context;
             _configuration = configuration;
+            _tenantProvider = tenantProvider;
         }
 
         public async Task<SaleResult> CompleteSaleAsync(CompleteSaleRequest request)
@@ -745,7 +747,7 @@ namespace Rxnxt.Business.Implementations
                 var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
                 if (salesIntegrationEnabled)
                 {
-                    var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
+                    var tenantId = _tenantProvider.GetTenantId();
                     var storeId = _configuration["SalesIntegration:StoreId"] ?? string.Empty;
                     var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
                     var billType = _configuration["SalesIntegration:BillType"] ?? "Sale";

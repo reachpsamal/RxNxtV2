@@ -37,7 +37,8 @@ public class BillController : Controller
     {
         var baseUrl = _configuration["BillApi:BaseUrl"]
             ?? "https://arogyanxt-test-api.arogyanxt.com/api/pharmacy/bills";
-        var tenantId = _configuration["SalesIntegration:TenantId"]
+        var tenantId = User.FindFirst("TenantID")?.Value
+            ?? _configuration["SalesIntegration:TenantId"]
             ?? "687C831E-DBCB-4A01-A2C6-2B9D260B2E45";
 
         var url = $"{baseUrl.TrimEnd('/')}/{billType}/{uniqueId}/pdf?copy={copy}";

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
 using Rxnxt.Business.Interfaces;
@@ -11,10 +12,14 @@ namespace Rxnxt.Business.Implementations
     public sealed class PurchaseRepository : IPurchaseRepository
     {
         private readonly PharmacyDbContext _context;
+        private readonly IConfiguration _configuration;
+        private readonly ITenantProvider _tenantProvider;
 
-        public PurchaseRepository(PharmacyDbContext context)
+        public PurchaseRepository(PharmacyDbContext context, IConfiguration configuration, ITenantProvider tenantProvider)
         {
             _context = context;
+            _configuration = configuration;
+            _tenantProvider = tenantProvider;
         }
 
         public async Task<PurchaseResult> CompletePurchaseAsync(CompletePurchaseRequest request)
@@ -83,6 +88,9 @@ namespace Rxnxt.Business.Implementations
                 var grnNo = $"PUR-{nextNo}";
                 var grnUniqueId = Guid.NewGuid().ToString();
 
+                var tenantId = _tenantProvider.GetTenantId();
+                var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
+
                 var header = new GrnHeaderRow
                 {
                     UniqueID = grnUniqueId,
@@ -93,9 +101,9 @@ namespace Rxnxt.Business.Implementations
                     RefNumber = supplierInvoiceNo,
                     RefDate = request.RefDate.Date,
                     ActiveStatus = true,
-                    CreatedBy = "ADMIN",
+                    CreatedBy = createdBy,
                     CreatedDate = grnDate,
-                    TenantId = null
+                    TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
                 };
 
                 _context.GrnHeaders.Add(header);
@@ -148,7 +156,7 @@ namespace Rxnxt.Business.Implementations
                         MRP = item.Mrp,
                         ItemDiscPerc = item.DiscountPercent,
                         ItemDiscAmount = lineDisc,
-                        TenantId = null
+                        TenantId = string.IsNullOrWhiteSpace(tenantId) ? null : tenantId
                     };
 
                     _context.GrnDetails.Add(detail);

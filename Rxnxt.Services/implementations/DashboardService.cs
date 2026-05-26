@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Rxnxt.Business.Data;
+using Rxnxt.Business.Interfaces;
 using Rxnxt.Services.Dtos;
 
 namespace Rxnxt.Services.Implementations;
@@ -7,16 +8,18 @@ namespace Rxnxt.Services.Implementations;
 public sealed class DashboardService
 {
     private readonly PharmacyDbContext _db;
+    private readonly ITenantProvider _tenantProvider;
 
-    public DashboardService(PharmacyDbContext db)
+    public DashboardService(PharmacyDbContext db, ITenantProvider tenantProvider)
     {
         _db = db;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<DashboardData> GetDashboardDataAsync()
     {
         var today = DateTime.Today;
-        var tenantId = "687C831E-DBCB-4A01-A2C6-2B9D260B2E45";
+        var tenantId = _tenantProvider.GetTenantId();
 
         try
         {

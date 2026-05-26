@@ -10,11 +10,13 @@ namespace Rxnxt.Business.Implementations;
 public sealed class CustomerRepository : ICustomerRepository
 {
     private readonly PharmacyDbContext _context;
+    private readonly ITenantProvider _tenantProvider;
     private readonly IConfiguration _configuration;
 
-    public CustomerRepository(PharmacyDbContext context, IConfiguration configuration)
+    public CustomerRepository(PharmacyDbContext context, ITenantProvider tenantProvider, IConfiguration configuration)
     {
         _context = context;
+        _tenantProvider = tenantProvider;
         _configuration = configuration;
     }
 
@@ -91,7 +93,7 @@ public sealed class CustomerRepository : ICustomerRepository
         var salesIntegrationEnabled = string.Equals(_configuration["SalesIntegration:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
         if (salesIntegrationEnabled)
         {
-            var tenantId = _configuration["SalesIntegration:TenantId"] ?? string.Empty;
+            var tenantId = _tenantProvider.GetTenantId();
             var createdBy = _configuration["SalesIntegration:CreatedBy"] ?? "POS";
             var now = DateTime.Now;
 
