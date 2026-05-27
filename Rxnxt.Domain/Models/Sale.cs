@@ -40,6 +40,9 @@ namespace Rxnxt.Domain.Models
         [Display(Name = "Invoice Number")]
         public string? InvoiceNumber { get; set; }
 
+        [NotMapped]
+        public string? UniqueId { get; set; }
+
         // Navigation
         [ForeignKey("CustomerId")]
         public virtual Customer? Customer { get; set; }

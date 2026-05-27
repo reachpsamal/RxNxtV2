@@ -12,6 +12,7 @@ public sealed class SalesHistoryFilterViewModel
 public sealed class SalesHistoryRowViewModel
 {
     public int Id { get; set; }
+    public string? UniqueId { get; set; }
     public DateTime SaleDate { get; set; }
     public string InvoiceNumber { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;

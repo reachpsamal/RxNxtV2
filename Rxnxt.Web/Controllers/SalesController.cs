@@ -211,6 +211,7 @@ namespace Rxnxt.Web.Controllers
                 Rows = sales.Select(s => new SalesHistoryRowViewModel
                 {
                     Id = s.Id,
+                    UniqueId = s.UniqueId,
                     SaleDate = s.SaleDate,
                     InvoiceNumber = s.InvoiceNumber ?? string.Empty,
                     CustomerName = s.Customer?.Name ?? string.Empty,
@@ -935,10 +936,20 @@ namespace Rxnxt.Web.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetSaleForEdit(int id, CancellationToken cancellationToken)
+        public async Task<IActionResult> GetSaleForEdit(string id, CancellationToken cancellationToken)
         {
             _ = cancellationToken;
-            var sale = await _saleService.GetByIdAsync(id);
+            if (Guid.TryParse(id, out _))
+            {
+                var header = await _db.SaleHeaders.AsNoTracking().FirstOrDefaultAsync(h => h.UniqueID == id, cancellationToken);
+                if (header == null) return NotFound();
+                id = header.ID.ToString();
+            }
+            if (!int.TryParse(id, out var saleId))
+            {
+                return NotFound();
+            }
+            var sale = await _saleService.GetByIdAsync(saleId);
             if (sale == null) return NotFound();
 
             var paymentMethod = "Cash";
@@ -995,6 +1006,7 @@ namespace Rxnxt.Web.Controllers
                     quantity = i.Quantity,
                     unitType = i.UnitType,
                     price = i.Price,
+                    mrp = i.Mrp,
                     discountPercent = i.DiscountPercent,
                     discountAmount = i.DiscountAmount,
                     taxPercent = i.TaxPercent,

@@ -117,6 +117,7 @@ public sealed class SalesReturnController : Controller
             return new SalesReturnRowViewModel
             {
                 Id = h.ID,
+                UniqueId = h.UniqueID,
                 InvoiceNumber = h.BillNo ?? string.Empty,
                 SaleDate = h.BillDate,
                 CustomerName = customerName,

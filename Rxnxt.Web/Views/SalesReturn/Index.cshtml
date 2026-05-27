@@ -83,7 +83,7 @@
                                 <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @r.GrandTotal.ToString("0.00")</td>
                                 <td>@r.PaymentStatus</td>
                                 <td>
-                                    <a class="btn-primary-pharmacy" style="padding:4px 12px;text-decoration:none;font-size:0.85rem;" href="@Url.Action("Index", "Sales", new { editSaleId = r.Id, returnMode = 1 })">
+                                    <a class="btn-primary-pharmacy" style="padding:4px 12px;text-decoration:none;font-size:0.85rem;" href="@Url.Action("Index", "Sales", new { editSaleId = r.UniqueId ?? r.Id.ToString(), returnMode = 1 })">
                                         <i class="bi bi-arrow-counterclockwise"></i> Return
                                     </a>
                                 </td>

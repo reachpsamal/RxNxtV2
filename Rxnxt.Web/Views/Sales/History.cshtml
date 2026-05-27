@@ -69,10 +69,10 @@
                                 <td style="font-variant-numeric: tabular-nums; font-weight:700;">₹ @s.GrandTotal.ToString("0.00")</td>
                                 <td>@s.PaymentStatus</td>
                                 <td style="white-space:nowrap;">
-                                    <a class="btn-outline-pharmacy sales-history-action sales-history-action-edit" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.Id })">
+                                    <a class="btn-outline-pharmacy sales-history-action sales-history-action-edit" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.UniqueId ?? s.Id.ToString() })">
                                         <i class="bi bi-pencil-square"></i> Edit
                                     </a>
-                                    @* <a class="btn-outline-pharmacy sales-history-action" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.Id, returnMode = 1 })">
+                                    @* <a class="btn-outline-pharmacy sales-history-action" style="padding:8px 10px;" href="@Url.Action("Index", "Sales", new { editSaleId = s.UniqueId ?? s.Id.ToString(), returnMode = 1 })">
                                         <i class="bi bi-arrow-counterclockwise"></i> Return
                                     </a> *@
                                     <a class="btn-outline-pharmacy sales-history-action sales-history-action-print" style="padding:8px 10px;" target="_blank" href="@Url.Action("Print", "Bill", new { billType = "Sale", id = s.Id })">

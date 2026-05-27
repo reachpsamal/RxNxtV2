@@ -1172,7 +1172,7 @@ function renderSaleItems() {
                     
 
                 </td>
-                <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.price)}</td>
+                <td style="font-variant-numeric: tabular-nums;">${formatCurrency(item.mrp || item.price)}</td>
                 <td>
                     <input type="number" class="item-discount-input" value="${item.discountPercent}" min="0" max="100" step="0.5"
                             oninput="updateItemDiscountLive(${index}, this.value)" onchange="updateItemDiscount(${index}, this.value)" id="disc-${index}">
@@ -1181,7 +1181,7 @@ function renderSaleItems() {
                 <td id="taxAmt-${index}" style="font-variant-numeric: tabular-nums;">${formatCurrency(item.taxAmount || 0)}</td>
                 <td id="lineTotal-${index}" class="text-right" style="font-weight:700; font-variant-numeric: tabular-nums;">${formatCurrency(item.total)}</td>
                 <td>
-                    ${isReturnMode ? '' : `<button class="btn-remove" onclick="removeItem(${index})" title="Remove">
+                    ${isReturnMode ? '' : `<button class="btn-remove" onclick="showDeleteConfirm(${index})" title="Remove">
                         <i class="bi bi-trash3"></i>
                     </button>`}
                 </td>
@@ -1315,7 +1315,28 @@ function updateItemDiscountLive(index, value) {
     updateSaleItemsSummary();
 }
 
-function removeItem(index) {
+let pendingDeleteIndex = -1;
+
+function showDeleteConfirm(index) {
+    const name = saleItems[index].productName || saleItems[index].medicineName;
+    document.getElementById('deleteConfirmMessage').textContent =
+        `Are you sure to Delete the item "${name}"?`;
+    pendingDeleteIndex = index;
+    const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    modal.show();
+}
+
+document.getElementById('deleteConfirmYes').addEventListener('click', function () {
+    if (pendingDeleteIndex >= 0) {
+        const idx = pendingDeleteIndex;
+        pendingDeleteIndex = -1;
+        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+        if (modal) modal.hide();
+        reallyRemoveItem(idx);
+    }
+});
+
+function reallyRemoveItem(index) {
     const name = saleItems[index].productName || saleItems[index].medicineName;
     saleItems.splice(index, 1);
     renderSaleItems();
@@ -1851,6 +1872,10 @@ function startNewSale() {
     originalSaleAdditionalDiscount = 0;
     window.__lastCompletedSaleId = null;
 
+    $('#editInvoiceBadge').hide();
+    $('#editInvoiceNumber').text('');
+    document.title = 'New Sale';
+
     // Reset UI
     $('#selectedCustomerCard').hide().empty();
     $('#customerSearch').val('').show();
@@ -1994,6 +2019,13 @@ function loadSaleForEdit(saleId) {
 
             editingSaleId = parseInt(data.saleId || saleId, 10) || null;
 
+            const invNo = data.invoiceNumber || '';
+            if (invNo) {
+                $('#editInvoiceNumber').text(invNo);
+                $('#editInvoiceBadge').show();
+                document.title = 'Editing: ' + invNo + ' - New Sale';
+            }
+
             // Reset current draft
             selectedCustomer = null;
             saleItems = [];
@@ -2091,16 +2123,16 @@ function loadSaleForEdit(saleId) {
                         quantity: qty,
                         unitType: i.unitType || (i.uomName || 'PCS'),
                         price: price,
+                        mrp: parseFloat(i.mrp) || 0,
                         discountPercent: derivedDiscPercent,
-                        discountAmount: 0,
+                        discountAmount: parseFloat(i.discountAmount) || 0,
                         taxPercent: effectiveTaxPercent,
-                        taxAmount: 0,
-                        baseTotal: 0,
-                        total: 0,
+                        taxAmount: parseFloat(i.taxAmount) || 0,
+                        baseTotal: parseFloat(i.total) || 0,
+                        total: parseFloat(i.total) || 0,
                         availableQty: i.availableQty
                     };
                     saleItems.push(item);
-                    recalculateItem(saleItems.length - 1);
                 });
 
                 // Additional discount

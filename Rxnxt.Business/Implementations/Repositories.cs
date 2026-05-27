@@ -1782,6 +1782,14 @@ namespace Rxnxt.Business.Implementations
                     ? pn
                     : pidKey;
 
+                var itemPrice = d.SalePrice ?? d.MRP ?? 0m;
+                var saleQty = d.SaleUOMQty ?? d.Qty ?? 1m;
+                if (d.SalePrice.HasValue && d.ItemTotal.HasValue && d.ItemTotal.Value > 0
+                    && saleQty > 1m && Math.Abs(d.SalePrice.Value - d.ItemTotal.Value) <= 0.02m)
+                {
+                    itemPrice = Math.Round(d.ItemTotal.Value / saleQty, 4);
+                }
+
                 sale.SaleItems.Add(new SaleItem
                 {
                     Id = d.ID,
@@ -1793,7 +1801,8 @@ namespace Rxnxt.Business.Implementations
                     UomName = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
                     Quantity = (int)Math.Round(d.SaleUOMQty ?? d.Qty ?? 0, 0),
                     UnitType = string.IsNullOrWhiteSpace(d.SaleUOMID) ? "PCS" : d.SaleUOMID,
-                    Price = d.SalePrice ?? d.MRP ?? 0,
+                    Price = itemPrice,
+                    Mrp = d.MRP ?? 0,
                     DiscountPercent = d.ItemDiscPerc ?? 0,
                     DiscountAmount = d.ItemDiscAmount ?? 0,
                     TaxPercent = d.TaxPerc ?? 0,
@@ -1803,6 +1812,15 @@ namespace Rxnxt.Business.Implementations
             }
 
             sale.ItemDiscount = sale.SaleItems.Sum(i => i.DiscountAmount);
+
+            if ((header.ExtraLess == null || header.ExtraLess == 0) && sale.SaleItems.Any())
+            {
+                var itemsTotal = sale.SaleItems.Sum(i => i.Total);
+                if (itemsTotal > sale.GrandTotal)
+                {
+                    sale.AdditionalDiscount = itemsTotal - sale.GrandTotal;
+                }
+            }
 
             foreach (var p in payments)
             {
@@ -1913,6 +1931,7 @@ namespace Rxnxt.Business.Implementations
                     return new Sale
                     {
                         Id = h.ID,
+                        UniqueId = h.UniqueID,
                         SaleDate = h.BillDate,
                         InvoiceNumber = h.BillNo,
                         CustomerId = customer != null && customer.Id > 0 ? customer.Id : null,
