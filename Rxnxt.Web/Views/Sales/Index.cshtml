@@ -159,21 +159,11 @@
                         </tbody>
                     </table>
 
-                    <div class="sale-items-summary" id="saleItemsSummary" style="display:none;">
-                        <div class="sale-items-summary-row sale-items-summary-row-compact sale-items-summary-header-row">
-                            <div class="sale-items-summary-label">No. of Items</div>
-                            <div class="sale-items-summary-label">Taxable Amt</div>
-                            <div class="sale-items-summary-label">Discount Amt</div>
-                            <div class="sale-items-summary-label">Tax Amt</div>
-                            <div class="sale-items-summary-label">Payable Amt</div>
-                        </div>
-                        <div class="sale-items-summary-row sale-items-summary-row-compact sale-items-summary-values-row">
-                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryItems" value="0" readonly>
-                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryMrp" value="₹ 0.00" readonly>
-                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryDiscountAmt" value="₹ 0.00" readonly>
-                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryTax" value="₹ 0.00" readonly>
-                            <input type="text" class="sale-items-summary-input sale-items-summary-input-readonly" id="saleSummaryPayable" value="₹ 0.00" readonly>
-                        </div>
+                    <div class="sale-items-count" id="saleItemsCount" style="display:none;">
+                        <span class="items-count-badge">
+                            <i class="bi bi-box-seam"></i>
+                            <span id="itemsCountValue">0</span> Items
+                        </span>
                     </div>
                 </div>
             </div>
@@ -276,7 +266,21 @@
             <div class="bill-summary-title">
                 <i class="bi bi-receipt-cutoff"></i> Bill Settlement
             </div>
-
+            <div class="bill-row">
+                <span class="label">Gross Amt</span>
+                <span class="value" id="grsamt">₹ 0.00</span>
+            </div>
+            <div class="bill-row">
+                <span class="label">Bill Discount</span>
+                <span class="value">
+                    % <input type="number" class="additional-discount-input" id="additionalDiscountPercent" value="0" min="0" max="100" step="0.5">
+                    ₹ <input type="number" class="additional-discount-input" id="additionalDiscount" value="0" min="0" step="0.01" readonly>
+                </span>
+            </div>
+            <div class="bill-row" id="afterDiscountRow">
+                <span class="label">After Discount</span>
+                <span class="value" id="afterDiscount">₹ 0.00</span>
+            </div>
             <div class="bill-row">
                 <span class="label">Taxable Amt</span>
                 <span class="value" id="billSubtotal">₹ 0.00</span>
@@ -288,14 +292,6 @@
             <div class="bill-row discount">
                 <span class="label">Item Discount</span>
                 <span class="value" id="billItemDiscount">- ₹ 0.00</span>
-            </div>
-            <hr class="bill-divider">
-            <div class="bill-row">
-                <span class="label">Additional Discount</span>
-                <span class="value">
-                    % <input type="number" class="additional-discount-input" id="additionalDiscountPercent" value="0" min="0" max="100" step="0.5">
-                    ₹ <input type="number" class="additional-discount-input" id="additionalDiscount" value="0" min="0" step="0.01" readonly>
-                </span>
             </div>
             <div class="bill-row" id="billRoundOffRow">
                 <span class="label">Round-off</span>
@@ -315,81 +311,25 @@
             <hr class="bill-divider">
 
             <label class="form-label-custom" style="margin-bottom: 10px;">Select Payment Method</label>
-            <div class="payment-methods">
-                <div class="payment-method-card cash-card selected" onclick="selectPaymentMethod('Cash')" id="pmCash">
-                    <i class="bi bi-cash-stack"></i>
-                    <div class="method-name">Cash</div>
-                </div>
-                <div class="payment-method-card card-card" onclick="selectPaymentMethod('Card')" id="pmCard">
-                    <i class="bi bi-credit-card"></i>
-                    <div class="method-name">Card</div>
-                </div>
-                <div class="payment-method-card upi-card" onclick="selectPaymentMethod('UPI')" id="pmUpi">
-                    <i class="bi bi-phone"></i>
-                    <div class="method-name">UPI</div>
-                </div>
-                <div class="payment-method-card split-card" onclick="selectPaymentMethod('Split')" id="pmSplit">
+            @* <div class="payment-methods">
+                <div class="payment-method-card split-card selected" onclick="selectPaymentMethod('Split')" id="pmSplit">
                     <i class="bi bi-pie-chart"></i>
                     <div class="method-name">Split</div>
                 </div>
-            </div>
-
-            <!-- Cash Payment -->
-            <div class="payment-detail-form show" id="paymentCash">
-                <div class="row g-2">
-                    <div class="col-md-4">
-                        <label class="form-label-custom" id="cashAmountLabel">Amount Received</label>
-                        <input type="number" class="pharmacy-input" id="cashAmount" placeholder="0.00" min="0" step="0.01">
-                    </div>
-                    <div class="col-md-4">
-                        <div id="cashChangeBlock">
-                            <label class="form-label-custom">Change</label>
-                            <div class="pharmacy-input" style="display:flex; align-items:center; height:42px;">₹ <span id="changeAmount" style="margin-left:4px;">0.00</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Card Payment -->
-            <div class="payment-detail-form" id="paymentCard">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label-custom">Reference No</label>
-                        <input type="text" class="pharmacy-input" id="cardRefNo" maxlength="30" placeholder="Ref No">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label-custom">Amount</label>
-                        <input type="number" class="pharmacy-input" id="cardAmount" placeholder="0.00" step="0.01">
-                    </div>
-                </div>
-            </div>
-
-            <!-- UPI Payment -->
-            <div class="payment-detail-form" id="paymentUPI">
-                <div class="row g-2">
-                    <div class="col-md-6">
-                        <label class="form-label-custom">Reference No</label>
-                        <input type="text" class="pharmacy-input" id="upiRefNo" maxlength="30" placeholder="Ref No">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label-custom">Amount</label>
-                        <input type="number" class="pharmacy-input" id="upiAmount" placeholder="0.00" step="0.01">
-                    </div>
-                </div>
-            </div>
+            </div> *@
 
             <!-- Split Payment -->
-            <div class="payment-detail-form" id="paymentSplit">
+            <div class="payment-detail-form show" id="paymentSplit">
                 <div class="row g-2">
                     <div class="col-md-4">
-                        <label class="form-label-custom">Cash</label>
+                        <label class="form-label-custom"><i class="bi bi-cash-stack" style="margin-right:4px;color:var(--accent-500);"></i> Cash</label>
                         <input type="number" class="pharmacy-input" id="splitCash" placeholder="0.00" step="0.01">
                         <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 6px;">
                             Split Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label-custom">Card</label>
+                        <label class="form-label-custom"><i class="bi bi-credit-card" style="margin-right:4px;color:var(--primary-500);"></i> Card</label>
                         <input type="number" class="pharmacy-input" id="splitCard" placeholder="0.00" step="0.01">
                         <div style="margin-top: 6px;">
                             <label class="form-label-custom" style="margin-bottom: 4px;">Card Ref No</label>
@@ -397,8 +337,8 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label-custom">UPI</label>
-                        <input type="number" class="pharmacy-input" id="splitUpi" placeholder="0.00" step="0.01" readonly>
+                        <label class="form-label-custom"><i class="bi bi-phone" style="margin-right:4px;color:#6739b7;"></i> UPI</label>
+                        <input type="number" class="pharmacy-input" id="splitUpi" placeholder="0.00" step="0.01">
                         <div style="margin-top: 6px;">
                             <label class="form-label-custom" style="margin-bottom: 4px;">UPI Ref No</label>
                             <input type="text" class="pharmacy-input" id="splitUpiRefNo" maxlength="30" placeholder="Ref No">
@@ -437,6 +377,25 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="deleteConfirmYes">Yes, Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sale Confirmation Modal -->
+<div class="modal fade" id="saleConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-receipt"></i> Confirm Sale</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="saleConfirmBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-success-pharmacy btn-sm" id="saleConfirmYes">
+                    <i class="bi bi-check-circle"></i> Confirm & Submit
+                </button>
             </div>
         </div>
     </div>
