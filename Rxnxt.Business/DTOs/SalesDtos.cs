@@ -7,6 +7,7 @@ public class CustomerSearchResult
     public string Phone { get; set; } = string.Empty;
     public string? Email { get; set; }
     public int LoyaltyPoints { get; set; }
+    public string? CustomerCode { get; set; }
 }
 
 public class BatchSearchResult
@@ -93,4 +94,32 @@ public class SaleResult
     public string Message { get; set; } = string.Empty;
     public int? SaleId { get; set; }
     public string? InvoiceNumber { get; set; }
+}
+
+public class StockValidationRequest
+{
+    public List<StockValidationItem> Items { get; set; } = new();
+}
+
+public class StockValidationItem
+{
+    public Guid ProductId { get; set; }
+    public string BatchNumber { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+    public string UomName { get; set; } = "PCS";
+}
+
+public class StockValidationResult
+{
+    public bool HasIssues { get; set; }
+    public List<StockIssue> Issues { get; set; } = new();
+}
+
+public class StockIssue
+{
+    public string ProductName { get; set; } = string.Empty;
+    public string BatchNumber { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public decimal AvailableQty { get; set; }
+    public decimal RequiredQty { get; set; }
 }

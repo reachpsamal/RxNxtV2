@@ -173,6 +173,7 @@ let batchSuggestions = [];
 let activeBatchIndex = -1;
 
 const MVC_BASE = '/Sales';
+const API_BASE = '/api/api';
 
 const PREFETCH_STOCKS = Array.isArray(window.__prefetchStocks) ? window.__prefetchStocks : [];
 
@@ -358,7 +359,8 @@ function selectCustomer(id) {
                         id: obj.id ?? obj.Id ?? null,
                         name: obj.name ?? obj.Name ?? '',
                         phone: obj.phone ?? obj.Phone ?? '',
-                        email: obj.email ?? obj.Email ?? null
+                        email: obj.email ?? obj.Email ?? null,
+                        customerCode: obj.customerCode ?? obj.CustomerCode ?? null
                     } : null;
                 } catch { selectedCustomer = null; }
             }
@@ -398,7 +400,10 @@ function clearCustomerSearch() {
 function skipCustomer() {
     selectedCustomer = null;
     $('#selectedCustomerCard').html(`
-        <div class="customer-card" style="background: var(--gray-50); border-color: var(--gray-200);">
+        <div class="customer-card" style="position: relative; background: var(--gray-50); border-color: var(--gray-200);">
+            <button class="customer-remove-top" onclick="removeCustomer()" title="Change">
+                <i class="bi bi-pencil"></i>
+            </button>
             <div class="customer-avatar" style="background: var(--gray-400);">
                 <i class="bi bi-person" style="font-weight: normal;"></i>
             </div>
@@ -406,9 +411,6 @@ function skipCustomer() {
                 <div class="customer-name">Walk-in Customer</div>
                 <div class="customer-phone">No loyalty tracking</div>
             </div>
-            <button class="customer-remove" onclick="removeCustomer()" title="Change">
-                <i class="bi bi-pencil"></i>
-            </button>
         </div>
     `).show();
     $('#customerSearch').hide();
@@ -837,7 +839,7 @@ function addToCart() {
     $('#batchSearch, #medicineSearch').val('');
 }
 
-function addFromAdvancedSearch(productId, batchNumber) {
+async function addFromAdvancedSearch(productId, batchNumber) {
     const addKey = `${String(productId || '').trim().toLowerCase()}|${String(batchNumber || '').trim().toLowerCase()}`;
 
     if (isReturnMode) {
@@ -855,6 +857,37 @@ function addFromAdvancedSearch(productId, batchNumber) {
     inFlightBatchAdds.set(addKey, now);
 
     try {
+        // Real-time stock check from server before adding
+        var stockCheck;
+        try {
+            stockCheck = await $.get(`${API_BASE}/stocks/by-product-batch?productId=${encodeURIComponent(productId)}&batchNumber=${encodeURIComponent(batchNumber)}`);
+        } catch (e) {
+            stockCheck = null;
+        }
+
+        var liveAvailableQty;
+        var stockSourceName;
+        if (stockCheck) {
+            liveAvailableQty = readStockQty(stockCheck);
+            stockSourceName = stockCheck.productName || 'Unknown';
+        } else {
+            // Fall back to prefetched data if API fails
+            const prefetched = findPrefetchedStock(productId, batchNumber);
+            liveAvailableQty = prefetched ? readStockQty(prefetched) : 0;
+            stockSourceName = prefetched ? readStockProductName(prefetched) : 'Unknown';
+        }
+
+        if (liveAvailableQty <= 0) {
+            showStockIssueModal([{
+                productName: stockSourceName,
+                batchNumber: batchNumber,
+                message: `"${stockSourceName}" (${batchNumber}) is out of stock`,
+                availableQty: 0,
+                requiredQty: 1
+            }]);
+            return;
+        }
+
         const match = findPrefetchedStock(productId, batchNumber);
         if (!match) {
             showToast('Stock not found in preloaded list', 'error');
@@ -867,12 +900,14 @@ function addFromAdvancedSearch(productId, batchNumber) {
             return;
         }
 
+        // Use live stock qty for accuracy
+        b.availableQty = liveAvailableQty;
         currentBatchInfo = b;
 
         const fixedUnit = readStockUom(b);
         selectedUnitType = fixedUnit;
 
-        const availableQty = readStockQty(b);
+        const availableQty = liveAvailableQty;
         const productName = readStockProductName(b);
         const batchNo = readStockBatchNumber(b);
 
@@ -1676,6 +1711,18 @@ function updateCompleteSaleBtn() {
     $('#completeSaleBtn').prop('disabled', !canComplete);
 }
 
+function isPaymentSet() {
+    const cash = parseFloat($('#splitCash').val()) || 0;
+    const card = parseFloat($('#splitCard').val()) || 0;
+    const upi = parseFloat($('#splitUpi').val()) || 0;
+    return (cash + card + upi) > 0;
+}
+
+function showPaymentAlertModal() {
+    const modal = new bootstrap.Modal(document.getElementById('paymentAlertModal'));
+    modal.show();
+}
+
 function completeSale() {
     if (saleItems.length === 0) {
         showToast('Please add at least one item', 'error');
@@ -1685,7 +1732,11 @@ function completeSale() {
         executeSaleSubmit();
         return;
     }
-    showSaleConfirmModal();
+    if (!isPaymentSet()) {
+        showPaymentAlertModal();
+        return;
+    }
+    validateStockBeforeConfirm();
 }
 
 function showSaleConfirmModal() {
@@ -1931,6 +1982,53 @@ function printLastBill() {
     window.open(`/Bill/Print?billType=Sale&id=${encodeURIComponent(saleId)}`, '_blank');
 }
 
+function validateStockBeforeConfirm() {
+    var items = saleItems.map(function (i) {
+        return {
+            productId: i.productId,
+            batchNumber: i.batchNumber,
+            quantity: i.quantity,
+            uomName: i.saleUomName || i.uomName || 'PCS'
+        };
+    });
+
+    $.ajax({
+        url: API_BASE + '/sales/validate-stock',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ items: items }),
+        success: function (result) {
+            if (result && result.hasIssues) {
+                showStockIssueModal(result.issues || []);
+            } else {
+                showSaleConfirmModal();
+            }
+        },
+        error: function () {
+            showSaleConfirmModal();
+        }
+    });
+}
+
+function showStockIssueModal(issues) {
+    var html = '<div style="margin-bottom:12px;color:var(--gray-600);font-size:0.85rem;">The following items have insufficient stock. Please adjust quantities or remove them.</div>';
+    html += '<table class="stock-issue-table"><thead><tr>';
+    html += '<th>Product</th><th>Batch</th><th>Available</th><th>Required</th>';
+    html += '</tr></thead><tbody>';
+    issues.forEach(function (issue) {
+        html += '<tr>' +
+            '<td><strong>' + (issue.productName || '') + '</strong></td>' +
+            '<td>' + (issue.batchNumber || '') + '</td>' +
+            '<td class="stock-issue-available">' + formatNumber(issue.availableQty) + '</td>' +
+            '<td class="stock-issue-required">' + formatNumber(issue.requiredQty) + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    $('#stockIssueBody').html(html);
+    var modal = new bootstrap.Modal(document.getElementById('stockIssueModal'));
+    modal.show();
+}
+
 function startNewSale() {
     selectedCustomer = null;
     saleItems = [];
@@ -2105,22 +2203,22 @@ function loadSaleForEdit(saleId) {
             selectedUnitType = 'PCS';
 
             // Customer
-            if (data.customer && data.customer.id) {
-                selectedCustomer = { id: data.customer.id, name: data.customer.name || '', phone: data.customer.phone || '' };
-                $('#selectedCustomerCard').html(`
-                    <div class="customer-card" data-customer-json='${JSON.stringify(selectedCustomer).replace(/'/g, "&#39;")}'>
-                        <div class="customer-avatar">
-                            <i class="bi bi-person"></i>
+                if (data.customer && data.customer.id) {
+                    selectedCustomer = { id: data.customer.id, name: data.customer.name || '', phone: data.customer.phone || '', customerCode: data.customer.customerCode || '' };
+                    $('#selectedCustomerCard').html(`
+                        <div class="customer-card" style="position: relative;" data-customer-json='${JSON.stringify(selectedCustomer).replace(/'/g, "&#39;")}'>
+                            <button class="customer-remove-top" onclick="removeCustomer()" title="Remove Customer">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                            <div class="customer-avatar">
+                                <i class="bi bi-person"></i>
+                            </div>
+                            <div class="customer-info">
+                                <div class="customer-name">${selectedCustomer.name}${selectedCustomer.customerCode ? '<span style="font-weight:400;font-size:0.78rem;color:var(--gray-500);margin-left:8px;">OPD: ' + selectedCustomer.customerCode + '</span>' : ''}</div>
+                                <div class="customer-phone"><i class="bi bi-telephone"></i> ${selectedCustomer.phone}</div>
+                            </div>
                         </div>
-                        <div class="customer-info">
-                            <div class="customer-name">${selectedCustomer.name}</div>
-                            <div class="customer-phone">${selectedCustomer.phone}</div>
-                        </div>
-                        <button class="customer-remove" onclick="removeCustomer()" title="Change">
-                            <i class="bi bi-x-lg"></i>
-                        </button>
-                    </div>
-                `).show();
+                    `).show();
                 $('#customerSearch').hide();
                 $('#customerSearchIcon').hide();
                 $('#toggleNewCustomerForm').hide();

@@ -85,6 +85,7 @@ public sealed class CustomerSearchItemViewModel
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string? Email { get; set; }
+    public string? CustomerCode { get; set; }
 
     public static CustomerSearchItemViewModel FromDto(CustomerSearchResult dto)
     {
@@ -93,7 +94,8 @@ public sealed class CustomerSearchItemViewModel
             Id = dto.Id,
             Name = dto.Name,
             Phone = dto.Phone,
-            Email = dto.Email
+            Email = dto.Email,
+            CustomerCode = dto.CustomerCode
         };
     }
 

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Rxnxt.Domain.Models
 {
@@ -34,6 +35,9 @@ namespace Rxnxt.Domain.Models
 
         [Display(Name = "Created Date")]
         public DateTime CreatedDate { get; set; } = DateTime.Now;
+
+        [NotMapped]
+        public string? CustomerCode { get; set; }
 
         // Navigation
         public virtual ICollection<Sale> Sales { get; set; } = new List<Sale>();

@@ -9,12 +9,19 @@
     if (initials.Length > 2) initials = initials.Substring(0, 2);
 }
 
-<div class="customer-card" data-customer-json='@(Model?.ToJson() ?? "{}")'>
-    <div class="customer-avatar">@initials</div>
-    <div class="customer-info">
-        <div class="customer-name"><i class="bi bi-person"></i> @Model?.Name &middot; <i class="bi bi-telephone"></i> @Model?.Phone</div>
-    </div>
-    <button class="customer-remove" onclick="removeCustomer()" title="Remove Customer">
+<div class="customer-card" style="position: relative;" data-customer-json='@(Model?.ToJson() ?? "{}")'>
+    <button class="customer-remove-top" onclick="removeCustomer()" title="Remove Customer">
         <i class="bi bi-x-lg"></i>
     </button>
+    <div class="customer-avatar">@initials</div>
+    <div class="customer-info">
+        <div class="customer-name">
+            <i class="bi bi-person"></i> @Model?.Name
+            @if (!string.IsNullOrWhiteSpace(Model?.CustomerCode))
+            {
+                <span style="font-weight:400;font-size:0.78rem;color:var(--gray-500);margin-left:8px;">OPD: @Model.CustomerCode</span>
+            }
+        </div>
+        <div class="customer-phone"><i class="bi bi-telephone"></i> @Model?.Phone</div>
+    </div>
 </div>

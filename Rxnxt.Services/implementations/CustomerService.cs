@@ -30,7 +30,8 @@ public sealed class CustomerService
             Name = customer.Name,
             Phone = customer.Phone,
             Email = customer.Email,
-            LoyaltyPoints = customer.LoyaltyPoints
+            LoyaltyPoints = customer.LoyaltyPoints,
+            CustomerCode = customer.CustomerCode
         };
     }
 

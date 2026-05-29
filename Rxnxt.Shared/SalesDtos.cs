@@ -7,6 +7,7 @@ public class CustomerSearchResult
     public string Phone { get; set; } = string.Empty;
     public string? Email { get; set; }
     public int LoyaltyPoints { get; set; }
+    public string? CustomerCode { get; set; }
 }
 
 public class BatchSearchResult

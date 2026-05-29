@@ -212,7 +212,7 @@
                     <div class="input-group-pharmacy" style="position: relative; flex: 1;">
                         <i class="bi bi-search input-icon" id="customerSearchIcon"></i>
                         <input type="text" class="pharmacy-input" id="customerSearch"
-                               placeholder="Search by name or phone..." autocomplete="off">
+                               placeholder="Search by name, phone, or OPD number" autocomplete="off">
                         <button class="input-clear" id="customerSearchClear" onclick="clearCustomerSearch()">
                             <i class="bi bi-x-circle"></i>
                         </button>
@@ -396,6 +396,40 @@
                 <button type="button" class="btn-success-pharmacy btn-sm" id="saleConfirmYes">
                     <i class="bi bi-check-circle"></i> Confirm & Submit
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Issue Modal -->
+<div class="modal fade" id="stockIssueModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-exclamation-triangle text-danger"></i> Insufficient Stock</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="stockIssueBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Alert Modal -->
+<div class="modal fade" id="paymentAlertModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title"><i class="bi bi-credit-card text-warning"></i> Payment Required</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                Please enter payment details before completing the sale.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" data-bs-dismiss="modal">OK</button>
             </div>
         </div>
     </div>

@@ -431,6 +431,83 @@ namespace Rxnxt.Web.Controllers
 
         // ==================== PURCHASE ENDPOINTS ====================
 
+        [HttpPost("sales/validate-stock")]
+        public async Task<IActionResult> ValidateStock([FromBody] StockValidationRequest request)
+        {
+            if (request?.Items == null || request.Items.Count == 0)
+                return Ok(new StockValidationResult { HasIssues = false });
+
+            var issues = new List<StockIssue>();
+
+            foreach (var item in request.Items)
+            {
+                var productIdStr = item.ProductId.ToString();
+
+                var stock = await _db.ProductStockView
+                    .Where(s => s.ProductID == productIdStr && s.BatchNumber == item.BatchNumber)
+                    .Select(s => new { s.AvailableQty, s.ProductName, s.UOMName })
+                    .FirstOrDefaultAsync();
+
+                var availableBaseQty = stock?.AvailableQty ?? 0m;
+
+                var requiredBaseQty = (decimal)item.Quantity;
+
+                if (stock != null && !string.Equals(stock.UOMName, item.UomName, StringComparison.OrdinalIgnoreCase))
+                {
+                    var pm = await _db.ProductMasters
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(p => p.UniqueID == productIdStr);
+
+                    if (pm != null)
+                    {
+                        var uomIds = new[] { pm.UOMID, pm.OtherUOMID }
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        var uomNames = uomIds.Count == 0
+                            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                            : await _db.UomMasters
+                                .AsNoTracking()
+                                .Where(u => uomIds.Contains(u.UniqueID))
+                                .Select(u => new { u.UniqueID, u.UOMName })
+                                .ToDictionaryAsync(x => x.UniqueID, x => x.UOMName ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
+                        var baseName = (!string.IsNullOrWhiteSpace(pm.UOMID) && uomNames.TryGetValue(pm.UOMID, out var bn)) ? bn : string.Empty;
+                        var otherName = (!string.IsNullOrWhiteSpace(pm.OtherUOMID) && uomNames.TryGetValue(pm.OtherUOMID, out var on)) ? on : string.Empty;
+                        var factor = pm.ConversionFactor.GetValueOrDefault(1m);
+                        if (factor <= 0) factor = 1m;
+
+                        if (!string.IsNullOrWhiteSpace(otherName) && item.UomName.Equals(otherName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var baseIsPcs = string.Equals(baseName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                            var otherIsPcs = string.Equals(otherName?.Trim(), "PCS", StringComparison.OrdinalIgnoreCase);
+                            var mappingReversed = baseIsPcs && !otherIsPcs;
+                            requiredBaseQty = mappingReversed ? requiredBaseQty * factor : requiredBaseQty / factor;
+                        }
+                    }
+                }
+
+                if (availableBaseQty < requiredBaseQty)
+                {
+                    issues.Add(new StockIssue
+                    {
+                        ProductName = stock?.ProductName ?? item.ProductId.ToString(),
+                        BatchNumber = item.BatchNumber,
+                        Message = $"Only {availableBaseQty:#.##} available, required {requiredBaseQty:#.##}",
+                        AvailableQty = availableBaseQty,
+                        RequiredQty = requiredBaseQty
+                    });
+                }
+            }
+
+            return Ok(new StockValidationResult
+            {
+                HasIssues = issues.Count > 0,
+                Issues = issues
+            });
+        }
+
         [HttpPost("purchases/complete")]
         public async Task<IActionResult> CompletePurchase([FromBody] CompletePurchaseRequest request)
         {

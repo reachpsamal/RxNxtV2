@@ -28,13 +28,16 @@ public sealed class CustomerRepository : ICustomerRepository
             var q = (query ?? string.Empty).Trim();
             if (q.Length < 2) return new List<CustomerSearchResult>();
             var term = q.ToLowerInvariant();
+            var tenantId = _tenantProvider.GetTenantId();
 
             return await _context.CustomerMasters
                 .AsNoTracking()
                 .Where(c => c.ActiveStatus)
+                .Where(c => string.IsNullOrWhiteSpace(tenantId) || c.TenantId == tenantId)
                 .Where(c =>
                     c.CustomerName.ToLower().Contains(term) ||
-                    (c.MobileNumber != null && c.MobileNumber.Contains(q)))
+                    (c.MobileNumber != null && c.MobileNumber.Contains(q)) ||
+                    (c.CustomerCode != null && c.CustomerCode.ToLower().Contains(term)))
                 .OrderBy(c => c.CustomerName)
                 .Take(10)
                 .Select(c => new CustomerSearchResult
@@ -43,7 +46,8 @@ public sealed class CustomerRepository : ICustomerRepository
                     Name = c.CustomerName,
                     Phone = c.MobileNumber ?? string.Empty,
                     Email = null,
-                    LoyaltyPoints = 0
+                    LoyaltyPoints = 0,
+                    CustomerCode = c.CustomerCode
                 })
                 .ToListAsync();
         }
@@ -81,7 +85,8 @@ public sealed class CustomerRepository : ICustomerRepository
                 Name = row.CustomerName,
                 Phone = row.MobileNumber ?? string.Empty,
                 Email = null,
-                LoyaltyPoints = 0
+                LoyaltyPoints = 0,
+                CustomerCode = row.CustomerCode
             };
         }
 

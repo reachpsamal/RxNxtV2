@@ -12,6 +12,10 @@ else
             <div class="item-name">@c.Name</div>
             <div class="item-detail">
                 <i class="bi bi-telephone"></i> @c.Phone
+                @if (!string.IsNullOrWhiteSpace(c.CustomerCode))
+                {
+                    @: &middot; <i class="bi bi-file-text"></i> OPD: @c.CustomerCode
+                }
                 @if (!string.IsNullOrWhiteSpace(c.Email))
                 {
                     @: &middot; <i class="bi bi-envelope"></i> @c.Email
