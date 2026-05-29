@@ -9,6 +9,8 @@
 
 <input type="hidden" id="serverSaleSuccessInvoice" value="@(TempData["SaleSuccessInvoice"] ?? string.Empty)">
 <input type="hidden" id="serverSaleSuccessId" value="@(TempData["SaleSuccessId"] ?? string.Empty)">
+<input type="hidden" id="serverSaleSuccessUniqueId" value="@(TempData["SaleSuccessUniqueId"] ?? string.Empty)">
+<input type="hidden" id="serverSaleSuccessIsReturn" value="@(TempData["SaleSuccessIsReturn"] ?? string.Empty)">
 <input type="hidden" id="serverSaleError" value="@(TempData["SaleError"] ?? string.Empty)">
 
 <!-- Success Overlay -->
@@ -325,7 +327,7 @@
                         <label class="form-label-custom"><i class="bi bi-cash-stack" style="margin-right:4px;color:var(--accent-500);"></i> Cash</label>
                         <input type="number" class="pharmacy-input" id="splitCash" placeholder="0.00" step="0.01">
                         <div style="font-size: 0.82rem; color: var(--gray-500); margin-top: 6px;">
-                            Split Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
+                            Remaining: <strong id="splitRemaining" style="color: var(--primary-600);">₹ 0.00</strong>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -387,14 +389,14 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title"><i class="bi bi-receipt"></i> Confirm Sale</h6>
+                <h6 class="modal-title"><i class="bi bi-receipt"></i> Sale Verification Summary</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="saleConfirmBody"></div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="display:flex;justify-content:space-between;">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn-success-pharmacy btn-sm" id="saleConfirmYes">
-                    <i class="bi bi-check-circle"></i> Confirm & Submit
+                <button type="button" class="btn btn-primary btn-sm" id="saleConfirmYes">
+                    <i class="bi bi-check-circle"></i> Finalize Sale &amp; Generate Invoice
                 </button>
             </div>
         </div>

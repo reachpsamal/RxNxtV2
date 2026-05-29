@@ -1650,12 +1650,20 @@ function syncSplitPayments(changedField, normalizeChangedField) {
     card = Math.max(0, Math.min(card, grandTotal));
     upi = Math.max(0, Math.min(upi, grandTotal));
 
-    if (changedField === 'cash') {
-        card = 0; upi = 0;
-    } else if (changedField === 'card') {
-        if (card > 0) cash = 0; upi = 0;
-    } else if (changedField === 'upi') {
-        if (upi > 0) cash = 0; card = 0;
+    // If the total exceeds grandTotal, cap the field the user is editing
+    const totalEntered = cash + card + upi;
+    if (totalEntered > grandTotal) {
+        const excess = totalEntered - grandTotal;
+        if (changedField === 'cash') cash = Math.max(0, cash - excess);
+        else if (changedField === 'card') card = Math.max(0, card - excess);
+        else if (changedField === 'upi') upi = Math.max(0, upi - excess);
+        else {
+            // fallback: reduce cash first
+            const knockoff = Math.min(cash, excess);
+            cash -= knockoff;
+            const remain = excess - knockoff;
+            if (remain > 0) card = Math.max(0, card - remain);
+        }
     }
 
     const remaining = Math.max(0, grandTotal - cash - card - upi);
@@ -1671,6 +1679,15 @@ function syncSplitPayments(changedField, normalizeChangedField) {
     if (changedField !== 'upi') $('#splitUpi').val(upi.toFixed(2));
 
     $('#splitRemaining').text(formatCurrency(remaining));
+    // Visual hint: green = settled, red = still due
+    const remEl = $('#splitRemaining');
+    if (remaining <= 0.01) {
+        remEl.css('color', 'var(--accent-500)');
+    } else if (remaining > 1) {
+        remEl.css('color', 'var(--danger-500)');
+    } else {
+        remEl.css('color', 'var(--primary-600)');
+    }
 
     isSyncingSplit = false;
 }
@@ -1739,6 +1756,26 @@ function completeSale() {
     validateStockBeforeConfirm();
 }
 
+function confirmExpiryBadge(item) {
+    if (!item.expiryDate) return '';
+    const expiry = new Date(item.expiryDate);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const days = Math.ceil((expiry - today) / (1000*60*60*24));
+    if (days < 0) return '<span class="confirm-badge expired">EXP</span>';
+    if (days <= 90) return '<span class="confirm-badge warning">EXP</span>';
+    return '';
+}
+function confirmStockBadge(item) {
+    const qty = parseFloat(item.availableQty) || 0;
+    if (qty <= 0) return '<span class="confirm-badge out">OOS</span>';
+    if (qty <= 5) return '<span class="confirm-badge low">LOW</span>';
+    return '';
+}
+function confirmDiscountBadge(item) {
+    const d = parseFloat(item.discountPercent) || 0;
+    if (d > 25) return `<span class="confirm-badge discount">${d}% OFF</span>`;
+    return '';
+}
 function showSaleConfirmModal() {
     const billDiscPercent = parseFloat($('#additionalDiscountPercent').val()) || 0;
     const engineInput = saleItems.map(item => ({
@@ -1774,7 +1811,7 @@ function showSaleConfirmModal() {
         const lineTotal = engItem ? engItem.finalAmount : ((parseFloat(item.price) || 0) * (parseFloat(item.quantity) || 0));
         html += `<tr>
             <td>${i + 1}</td>
-            <td>${item.productName || ''}</td>
+            <td>${item.productName || ''}${confirmExpiryBadge(item)}${confirmStockBadge(item)}${confirmDiscountBadge(item)}</td>
             <td style="font-size:0.75rem;color:var(--gray-500)">${item.batchNumber || ''}</td>
             <td>${item.quantity}</td>
             <td>${formatCurrency(item.price)}</td>
@@ -1792,10 +1829,17 @@ function showSaleConfirmModal() {
         <span>Tax: <strong>${formatCurrency(s.totalGSTAmount)}</strong></span>
     </div>`;
 
-    const method = 'Split';
+    const splitCash = parseFloat($('#splitCash').val()) || 0;
+    const splitCard = parseFloat($('#splitCard').val()) || 0;
+    const splitUpi = parseFloat($('#splitUpi').val()) || 0;
+    let payParts = [];
+    if (splitCash > 0) payParts.push(`Cash: ${formatCurrency(splitCash)}`);
+    if (splitCard > 0) payParts.push(`Card: ${formatCurrency(splitCard)}`);
+    if (splitUpi > 0) payParts.push(`UPI: ${formatCurrency(splitUpi)}`);
+    const paySummary = payParts.length > 0 ? payParts.join(' + ') : 'Not set';
     html += `<div class="confirm-footer-row">
         <span>Addl Disc: ${formatCurrency(s.billDiscountAmount)} &nbsp;|&nbsp; Round: ${formatCurrency(roundOff)}</span>
-        <span>Payment: <strong>${method}</strong></span>
+        <span>Payment: <strong>${paySummary}</strong></span>
     </div>`;
     html += `<div class="confirm-grand-total">Grand Total: ${formatCurrency(grandTotal)}</div>`;
 
@@ -1913,6 +1957,7 @@ function executeSaleSubmit() {
             const errorInput = doc.querySelector('#serverSaleError');
             const successInput = doc.querySelector('#serverSaleSuccessInvoice');
             const saleIdInput = doc.querySelector('#serverSaleSuccessId');
+            const uniqueIdInput = doc.querySelector('#serverSaleSuccessUniqueId');
 
             if (errorInput && errorInput.value) {
                 showToast(errorInput.value, 'error');
@@ -1923,11 +1968,16 @@ function executeSaleSubmit() {
             if (successInput && successInput.value) {
                 const invoice = successInput.value;
                 const saleId = parseInt(saleIdInput?.value || '', 10) || null;
+                const uniqueId = uniqueIdInput?.value || null;
+                const isReturnInput = doc.querySelector('#serverSaleSuccessIsReturn');
+                const isReturn = isReturnInput?.value === 'true';
 
                 $('#successInvoice').text(`#${invoice}`);
                 $('#successOverlay').addClass('show');
 
                 window.__lastCompletedSaleId = saleId;
+                window.__lastCompletedSaleUniqueId = uniqueId;
+                window.__lastCompletedSaleIsReturn = isReturn;
                 const $printBtn = $('#printBillBtn');
                 if (saleId && $printBtn.length) {
                     $printBtn.show();
@@ -1961,6 +2011,10 @@ $(function () {
     const invoice = ($('#serverSaleSuccessInvoice').val() || '').toString();
     const saleIdRaw = ($('#serverSaleSuccessId').val() || '').toString();
     const saleId = parseInt(saleIdRaw, 10) || null;
+    const uniqueIdRaw = ($('#serverSaleSuccessUniqueId').val() || '').toString();
+    const uniqueId = uniqueIdRaw || null;
+    const isReturnRaw = ($('#serverSaleSuccessIsReturn').val() || '').toString();
+    const isReturn = isReturnRaw === 'true';
     const err = ($('#serverSaleError').val() || '').toString();
     if (err) {
         showToast(err, 'error');
@@ -1970,6 +2024,8 @@ $(function () {
         $('#successOverlay').addClass('show');
 
         window.__lastCompletedSaleId = saleId;
+        window.__lastCompletedSaleUniqueId = uniqueId;
+        window.__lastCompletedSaleIsReturn = isReturn;
         if (saleId && $('#printBillBtn').length) {
             $('#printBillBtn').show();
         }
@@ -1977,9 +2033,14 @@ $(function () {
 });
 
 function printLastBill() {
-    const saleId = window.__lastCompletedSaleId;
-    if (!saleId) return;
-    window.open(`/Bill/Print?billType=Sale&id=${encodeURIComponent(saleId)}`, '_blank');
+    const billType = window.__lastCompletedSaleIsReturn ? 'SalesReturn' : 'Sale';
+    const uid = window.__lastCompletedSaleUniqueId;
+    if (uid) {
+        window.open(`/Bill/Print?billType=${billType}&id=${encodeURIComponent(uid)}`, '_blank');
+    } else {
+        const saleId = window.__lastCompletedSaleId;
+        if (saleId) window.open(`/Bill/Print?billType=${billType}&id=${encodeURIComponent(saleId)}`, '_blank');
+    }
 }
 
 function validateStockBeforeConfirm() {
@@ -2042,6 +2103,8 @@ function startNewSale() {
     allowedReturnItemKeys = null;
     originalSaleAdditionalDiscount = 0;
     window.__lastCompletedSaleId = null;
+    window.__lastCompletedSaleUniqueId = null;
+    window.__lastCompletedSaleIsReturn = false;
     isPrefillingEditSale = false;
     pendingDeleteIndex = -1;
 

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
+using Rxnxt.Business.Helpers;
 using Rxnxt.Business.Interfaces;
 using Rxnxt.Domain.Models;
 using System.Data;
@@ -161,7 +162,7 @@ namespace Rxnxt.Business.Implementations
 
                     _context.GrnDetails.Add(detail);
 
-                    await UpsertProductStockAsync(productUniqueId, detail.BatchNumber, detail.ExpiryDate, qty);
+                    await UpsertProductStockAsync(productUniqueId, detail.BatchNumber, detail.ExpiryDate, qty, grnUniqueId, grnNo, detail.UnitID, createdBy, tenantId, detail.UniqueID);
                 }
 
                 await _context.SaveChangesAsync();
@@ -252,7 +253,8 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
             }
         }
 
-        private async Task UpsertProductStockAsync(string productId, string? batchNumber, DateTime? expiryDate, decimal qtyToAdd)
+        private async Task UpsertProductStockAsync(string productId, string? batchNumber, DateTime? expiryDate, decimal qtyToAdd,
+            string grnUniqueId, string grnNo, string? unitId, string createdBy, string? tenantId, string detailUniqueId)
         {
             var batchNorm = (batchNumber ?? string.Empty).Trim();
 
@@ -274,8 +276,10 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
                     (ps.BatchNumber ?? string.Empty) == batchNorm);
             }
 
+            decimal openingBalance;
             if (row == null)
             {
+                openingBalance = 0m;
                 row = new ProductStockRow
                 {
                     ProductID = productId,
@@ -287,10 +291,38 @@ WHERE UPPER(LTRIM(RTRIM([{nameColumn}]))) = @u";
             }
             else
             {
-                row.PackQty = (row.PackQty ?? 0m) + qtyToAdd;
+                openingBalance = row.PackQty ?? 0m;
+                row.PackQty = openingBalance + qtyToAdd;
                 if (!row.ExpiryDate.HasValue && expiryDate.HasValue)
                     row.ExpiryDate = expiryDate.Value.Date;
             }
+
+            var movement = StockMovementHelper.BuildMovement(
+                productID: productId,
+                productStockID: row.ID > 0 ? row.ID : null,
+                batchNumber: batchNorm,
+                expiryDate: expiryDate?.Date,
+                openingBalance: openingBalance,
+                baseQtyDelta: qtyToAdd,
+                direction: "Inward",
+                movementType: "Purchase",
+                transactionQty: qtyToAdd,
+                transactionUOMID: null,
+                baseUOMID: null,
+                conversionFactor: null,
+                referenceType: "Purchase",
+                referenceID: grnUniqueId,
+                referenceLineID: detailUniqueId,
+                referenceNo: grnNo,
+                remarks: null,
+                mrp: null,
+                unitID: unitId,
+                packTypeID: null,
+                tenantId: tenantId,
+                createdBy: createdBy
+            );
+
+            _context.StockMovements.Add(movement);
         }
 
         public async Task<Purchase?> GetByIdAsync(int id)

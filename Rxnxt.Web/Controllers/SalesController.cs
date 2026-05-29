@@ -952,6 +952,20 @@ namespace Rxnxt.Web.Controllers
             var sale = await _saleService.GetByIdAsync(saleId);
             if (sale == null) return NotFound();
 
+            // CustomerCode is [NotMapped] on domain model — resolve from CustomerMasters
+            string? customerCode = null;
+            if (sale.Customer != null && string.IsNullOrEmpty(sale.Customer.CustomerCode))
+            {
+                var cm = await _db.CustomerMasters
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.ID == sale.Customer.Id);
+                if (cm != null) customerCode = cm.CustomerCode;
+            }
+            else if (sale.Customer != null)
+            {
+                customerCode = sale.Customer.CustomerCode;
+            }
+
             var paymentMethod = "Cash";
             if (sale.Payments != null && sale.Payments.Count > 1) paymentMethod = "Split";
             else if (sale.Payments != null && sale.Payments.Count == 1) paymentMethod = sale.Payments.First().PaymentMode;
@@ -995,7 +1009,7 @@ namespace Rxnxt.Web.Controllers
             {
                 saleId = sale.Id,
                 invoiceNumber = sale.InvoiceNumber,
-                customer = sale.Customer == null ? null : new { id = sale.Customer.Id, name = sale.Customer.Name, phone = sale.Customer.Phone },
+                customer = sale.Customer == null ? null : new { id = sale.Customer.Id, name = sale.Customer.Name, phone = sale.Customer.Phone, customerCode },
                 items = (sale.SaleItems ?? Array.Empty<Rxnxt.Domain.Models.SaleItem>()).Select(i => new
                 {
                     productId = i.ProductId,
@@ -1073,6 +1087,8 @@ namespace Rxnxt.Web.Controllers
 
             TempData["SaleSuccessInvoice"] = result.InvoiceNumber ?? string.Empty;
             TempData["SaleSuccessId"] = result.SaleId?.ToString() ?? string.Empty;
+            TempData["SaleSuccessUniqueId"] = result.UniqueId ?? string.Empty;
+            TempData["SaleSuccessIsReturn"] = request.ReturnMode ? "true" : "false";
             return RedirectToAction(nameof(Index));
         }
 

@@ -94,6 +94,7 @@ public class SaleResult
     public string Message { get; set; } = string.Empty;
     public int? SaleId { get; set; }
     public string? InvoiceNumber { get; set; }
+    public string? UniqueId { get; set; }
 }
 
 public class StockValidationRequest

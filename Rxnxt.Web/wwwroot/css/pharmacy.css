@@ -598,6 +598,31 @@ body {
     color: var(--danger-600);
 }
 
+.confirm-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 4px;
+    vertical-align: middle;
+    line-height: 1.4;
+}
+.confirm-badge.expired,
+.confirm-badge.out {
+    background: var(--danger-50, #fde8e8);
+    color: var(--danger-600, #c53030);
+}
+.confirm-badge.warning,
+.confirm-badge.low {
+    background: var(--warning-50, #fef3cd);
+    color: var(--warning-600, #856404);
+}
+.confirm-badge.discount {
+    background: var(--accent-50, #dbeafe);
+    color: var(--accent-700, #1e40af);
+}
+
 .autocomplete-no-results {
     padding: 16px;
     text-align: center;

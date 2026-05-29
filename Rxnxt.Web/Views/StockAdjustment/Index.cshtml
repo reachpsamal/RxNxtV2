@@ -1,0 +1,199 @@
+@model IEnumerable<Rxnxt.Business.Data.StockMovementRow>
+
+@{
+    ViewData["Title"] = "Stock Adjustment";
+}
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="section-card">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-plus-slash-minus"></i>
+                    New Adjustment
+                </div>
+            </div>
+            <div class="section-body">
+                <form asp-action="Create" method="post">
+                    @Html.AntiForgeryToken()
+
+                    @if (!string.IsNullOrWhiteSpace(TempData["AdjustmentError"] as string))
+                    {
+                        <div class="alert alert-danger py-2">@TempData["AdjustmentError"]</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(TempData["AdjustmentSuccess"] as string))
+                    {
+                        <div class="alert alert-success py-2">@TempData["AdjustmentSuccess"]</div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label-custom">Product <span style="color:var(--danger-500)">*</span></label>
+                        <div class="input-group-pharmacy" style="position: relative;">
+                            <i class="bi bi-search input-icon"></i>
+                            <input type="text" class="pharmacy-input" id="adjustmentProductSearch" placeholder="Search product" autocomplete="off">
+                            <input type="hidden" id="adjustmentProductId" name="productId" />
+                            <div class="autocomplete-dropdown" id="adjustmentProductDropdown"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label-custom">Batch Number</label>
+                        <input type="text" class="pharmacy-input" id="adjustmentBatchNumber" name="batchNumber" placeholder="Optional" autocomplete="off">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label-custom">Expiry Date</label>
+                        <input type="date" class="pharmacy-input" id="adjustmentExpiryDate" name="expiryDate">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label-custom">Quantity <span style="color:var(--danger-500)">*</span></label>
+                        <div class="input-group-pharmacy">
+                            <input type="number" class="pharmacy-input" id="adjustmentQuantity" name="quantity" step="0.01" placeholder="Use + for inward, - for outward" required>
+                        </div>
+                        <small class="text-muted">Positive = add stock, Negative = remove stock</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label-custom">Remarks</label>
+                        <textarea class="pharmacy-input" id="adjustmentRemarks" name="remarks" rows="2" placeholder="Reason for adjustment"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-lg"></i> Save Adjustment
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="section-card">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Adjustments
+                </div>
+            </div>
+            <div class="section-body p-0">
+                <div class="table-responsive">
+                    <table class="table pharmacy-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Product</th>
+                                <th>Batch</th>
+                                <th>Direction</th>
+                                <th>Qty</th>
+                                <th>Opening</th>
+                                <th>Closing</th>
+                                <th>Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model != null && Model.Any())
+                            {
+                                foreach (var m in Model)
+                                {
+                                    var productName = ViewBag.ProductLookup?[m.ProductID] ?? m.ProductID;
+                                    <tr>
+                                        <td class="text-nowrap">@m.CreatedDate.ToString("dd/MM/yy HH:mm")</td>
+                                        <td>@productName</td>
+                                        <td>@m.BatchNumber</td>
+                                        <td>
+                                            @if (m.Direction == "Inward")
+                                            {
+                                                <span class="badge bg-success">IN</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-danger">OUT</span>
+                                            }
+                                        </td>
+                                        <td class="fw-bold">@m.BaseQty.ToString("0.##")</td>
+                                        <td>@m.OpeningBalance.ToString("0.##")</td>
+                                        <td>@m.ExpectedClosingBalance.ToString("0.##")</td>
+                                        <td>@m.Remarks</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">No adjustments yet</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let adjustmentSearchTimeout;
+
+        document.getElementById('adjustmentProductSearch').addEventListener('input', function () {
+            clearTimeout(adjustmentSearchTimeout);
+            const q = this.value.trim();
+            if (q.length < 2) {
+                document.getElementById('adjustmentProductDropdown').classList.remove('show');
+                return;
+            }
+
+            adjustmentSearchTimeout = setTimeout(() => {
+                fetch(`/api/api/medicines/search?q=${encodeURIComponent(q)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const dropdown = document.getElementById('adjustmentProductDropdown');
+                        dropdown.innerHTML = '';
+                        if (data.length === 0) {
+                            dropdown.classList.remove('show');
+                            return;
+                        }
+                        data.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'autocomplete-item';
+                            div.innerHTML = `<strong>${item.productName}</strong> <small class="text-muted">${item.batchNumber} | ${item.manufacturer}</small>`;
+                            div.addEventListener('click', function () {
+                                document.getElementById('adjustmentProductSearch').value = item.productName + ' - ' + item.batchNumber;
+                                document.getElementById('adjustmentProductId').value = item.productId;
+                                document.getElementById('adjustmentBatchNumber').value = item.batchNumber || '';
+                                if (item.expiryDate) {
+                                    document.getElementById('adjustmentExpiryDate').value = item.expiryDate.substring(0, 10);
+                                }
+                                dropdown.classList.remove('show');
+                            });
+                            dropdown.appendChild(div);
+                        });
+                        dropdown.classList.add('show');
+                    })
+                    .catch(() => {});
+            }, 300);
+        });
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.input-group-pharmacy')) {
+                document.querySelectorAll('.autocomplete-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
+
+        // Toast for TempData
+        document.addEventListener('DOMContentLoaded', function () {
+            const container = document.getElementById('toastContainer');
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function (alert) {
+                const toast = document.createElement('div');
+                toast.className = 'toast-item ' + (alert.classList.contains('alert-success') ? 'success' : 'error');
+                toast.innerHTML = `<i class="bi ${alert.classList.contains('alert-success') ? 'bi-check-circle' : 'bi-exclamation-circle'}"></i> ${alert.innerText}`;
+                container.appendChild(toast);
+                setTimeout(() => { toast.remove(); }, 4000);
+            });
+        });
+    </script>
+}

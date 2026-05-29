@@ -571,3 +571,31 @@ public sealed class GrnDetailRow
     [Column(TypeName = "decimal(18,2)")]
     public decimal? ItemDiscAmount { get; set; }
 }
+
+[Table("ConfigSetting")]
+public sealed class ConfigSettingRow
+{
+    [Key]
+    public int ID { get; set; }
+
+    [StringLength(50)]
+    public string? UniqueID { get; set; }
+
+    [StringLength(50)]
+    public string? SettingGroup { get; set; }
+
+    [StringLength(50)]
+    public string? SettingKey { get; set; }
+
+    [StringLength(500)]
+    public string? SettingValue { get; set; }
+
+    [StringLength(500)]
+    public string? Remarks { get; set; }
+
+    [StringLength(50)]
+    public string? SettingLevel { get; set; }
+
+    [StringLength(50)]
+    public string? TenantId { get; set; }
+}

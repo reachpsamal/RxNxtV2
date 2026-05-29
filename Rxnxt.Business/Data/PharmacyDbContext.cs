@@ -39,6 +39,8 @@ namespace Rxnxt.Business.Data
 
         public DbSet<GrnHeaderRow> GrnHeaders { get; set; }
         public DbSet<GrnDetailRow> GrnDetails { get; set; }
+        public DbSet<StockMovementRow> StockMovements { get; set; }
+        public DbSet<ConfigSettingRow> ConfigSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -60,6 +62,8 @@ namespace Rxnxt.Business.Data
             modelBuilder.Entity<SupplierMasterRow>().ToTable("SupplierMaster");
             modelBuilder.Entity<GrnHeaderRow>().ToTable("GRNHeader");
             modelBuilder.Entity<GrnDetailRow>().ToTable("GRNDetail");
+            modelBuilder.Entity<StockMovementRow>().ToTable("StockMovement");
+            modelBuilder.Entity<ConfigSettingRow>().ToTable("ConfigSetting");
 
             modelBuilder.Entity<ProductStockRow>(entity =>
             {

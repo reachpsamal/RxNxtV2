@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Rxnxt.Business.Data;
 using Rxnxt.Business.DTOs;
+using Rxnxt.Business.Helpers;
 using Rxnxt.Business.Interfaces;
 using Rxnxt.Domain.Models;
 
@@ -1073,7 +1074,8 @@ namespace Rxnxt.Business.Implementations
                                 if (returnedBaseQty <= 0) continue;
 
                                 // Add stock back
-                                stockRow.PackQty = (stockRow.PackQty ?? 0m) + returnedBaseQty;
+                                var openingBeforeReturn = stockRow.PackQty ?? 0m;
+                                stockRow.PackQty = openingBeforeReturn + returnedBaseQty;
 
                                 var oldItemTotal = old.ItemTotal ?? 0m;
                                 var oldTax = old.TotalTaxAmount ?? 0m;
@@ -1113,6 +1115,28 @@ namespace Rxnxt.Business.Implementations
                                 resolvedSaleUomId ??= old.SaleUOMID;
                                 var resolvedBaseUomId = old.BaseUOMID;
 
+                                _context.StockMovements.Add(StockMovementHelper.BuildMovement(
+                                    productID: productIdStr,
+                                    productStockID: stockRow.ID,
+                                    batchNumber: i.BatchNumber,
+                                    expiryDate: i.ExpiryDate,
+                                    openingBalance: openingBeforeReturn,
+                                    baseQtyDelta: returnedBaseQty,
+                                    direction: "Inward",
+                                    movementType: "SaleReturn",
+                                    transactionQty: i.Quantity,
+                                    transactionUOMID: resolvedSaleUomId,
+                                    baseUOMID: resolvedBaseUomId,
+                                    conversionFactor: null,
+                                    referenceType: "SaleReturn",
+                                    referenceID: returnUniqueId,
+                                    referenceNo: "SR-0",
+                                    mrp: i.UnitPrice,
+                                    unitID: null,
+                                    packTypeID: null,
+                                    tenantId: tenantId,
+                                    createdBy: createdBy));
+
                                 returnDetailRows.Add(new Rxnxt.Business.Data.SalesReturnDetailRow
                                 {
                                     UniqueID = Guid.NewGuid().ToString(),
@@ -1140,6 +1164,19 @@ namespace Rxnxt.Business.Implementations
                             refundAmountBeforeTax = Round2(refundAmountBeforeTax);
                             refundDiscountAmount = Round2(refundDiscountAmount);
 
+                            // Proportionally distribute original bill-level (ExtraLess) discount
+                            var originalExtraLess = header.ExtraLess ?? 0m;
+                            var originalBillAmount = header.BillAmount ?? 0m;
+                            decimal proportionalBillDisc = 0m;
+                            if (originalExtraLess > 0m && (originalBillAmount + originalExtraLess) > 0m)
+                            {
+                                proportionalBillDisc = Round2(refundBillAmount * originalExtraLess / (originalBillAmount + originalExtraLess));
+                                if (proportionalBillDisc > 0m)
+                                {
+                                    refundBillAmount -= proportionalBillDisc;
+                                }
+                            }
+
                             var refundRounded = Math.Round(refundBillAmount, 0, MidpointRounding.AwayFromZero);
                             var refundRoundOff = refundRounded - refundBillAmount;
 
@@ -1155,7 +1192,7 @@ namespace Rxnxt.Business.Implementations
                                 TaxAmount = refundTaxAmount,
                                 DiscountAmount = refundDiscountAmount,
                                 ExtraAdd = 0m,
-                                ExtraLess = 0m,
+                                ExtraLess = proportionalBillDisc,
                                 ActiveStatus = true,
                                 CreatedBy = createdBy,
                                 CreatedDate = now,
@@ -1177,7 +1214,7 @@ namespace Rxnxt.Business.Implementations
                                 await _context.SaveChangesAsync();
                             }
 
-                            returnHeader.BillNo = $"SR-{returnHeader.ID}";
+                            returnHeader.BillNo = await GenerateBillNoAsync("SALERETURN", "PREFIX", "LAST_SERIAL_NUMBER", tenantId);
                             await _context.SaveChangesAsync();
 
                             await transaction.CommitAsync();
@@ -1186,8 +1223,9 @@ namespace Rxnxt.Business.Implementations
                             {
                                 Success = true,
                                 Message = "Return saved successfully!",
-                                SaleId = header.ID,
-                                InvoiceNumber = returnHeader.BillNo
+                                SaleId = returnHeader.ID,
+                                InvoiceNumber = returnHeader.BillNo,
+                                UniqueId = returnHeader.UniqueID
                             };
                         }
 
@@ -1204,7 +1242,27 @@ namespace Rxnxt.Business.Implementations
                             }
 
                             var qtyToRestore = d.Qty ?? 0m;
-                            stockRow.PackQty = (stockRow.PackQty ?? 0m) + qtyToRestore;
+                            var openingBeforeRestore = stockRow.PackQty ?? 0m;
+                            stockRow.PackQty = openingBeforeRestore + qtyToRestore;
+
+                            _context.StockMovements.Add(StockMovementHelper.BuildMovement(
+                                productID: d.ProductID,
+                                productStockID: stockRow.ID,
+                                batchNumber: d.BatchNumber,
+                                expiryDate: d.ExpiryDate,
+                                openingBalance: openingBeforeRestore,
+                                baseQtyDelta: qtyToRestore,
+                                direction: "Inward",
+                                movementType: "SaleEditRestore",
+                                transactionQty: qtyToRestore,
+                                transactionUOMID: d.SaleUOMID,
+                                baseUOMID: d.BaseUOMID,
+                                referenceType: "Sale",
+                                referenceID: headerUniqueId,
+                                referenceLineID: d.UniqueID,
+                                referenceNo: header.BillNo,
+                                tenantId: tenantId,
+                                createdBy: createdBy));
                         }
 
                         header.BillType = billType;
@@ -1258,7 +1316,7 @@ namespace Rxnxt.Business.Implementations
                         _context.SaleHeaders.Add(header);
                         await _context.SaveChangesAsync();
 
-                        header.BillNo = $"INV-{header.ID}";
+                        header.BillNo = await GenerateBillNoAsync("BILLING", "BILL_PREFIX", "LAST_BILL_NUMBER", tenantId);
                         await _context.SaveChangesAsync();
                     }
 
@@ -1428,6 +1486,27 @@ namespace Rxnxt.Business.Implementations
                         }
 
                         stockRow.PackQty = available - requiredBaseQty;
+
+                        _context.StockMovements.Add(StockMovementHelper.BuildMovement(
+                            productID: productIdStr,
+                            productStockID: stockRow.ID,
+                            batchNumber: item.BatchNumber,
+                            expiryDate: item.ExpiryDate,
+                            openingBalance: available,
+                            baseQtyDelta: -requiredBaseQty,
+                            direction: "Outward",
+                            movementType: "Sale",
+                            transactionQty: item.Quantity,
+                            transactionUOMID: selectedUomName,
+                            baseUOMID: pm?.UOMID,
+                            conversionFactor: pm?.ConversionFactor,
+                            referenceType: "Sale",
+                            referenceID: headerUniqueId,
+                            referenceLineID: null,
+                            referenceNo: header.BillNo,
+                            mrp: item.UnitPrice,
+                            tenantId: tenantId,
+                            createdBy: createdBy));
                     }
 
                     foreach (var tuple in lineBases)
@@ -1609,7 +1688,8 @@ namespace Rxnxt.Business.Implementations
                         Success = true,
                         Message = "Sale completed successfully!",
                         SaleId = header.ID,
-                        InvoiceNumber = header.BillNo
+                        InvoiceNumber = header.BillNo,
+                        UniqueId = header.UniqueID
                     };
                 }
 
@@ -1723,7 +1803,8 @@ namespace Rxnxt.Business.Implementations
                         Name = cm.CustomerName,
                         Phone = cm.MobileNumber ?? string.Empty,
                         Email = null,
-                        LoyaltyPoints = 0
+                        LoyaltyPoints = 0,
+                        CustomerCode = cm.CustomerCode
                     };
                 }
             }
@@ -1939,7 +2020,7 @@ namespace Rxnxt.Business.Implementations
                         SubTotal = h.AmountBeforeTax ?? 0,
                         ItemDiscount = Math.Max(0, (h.DiscountAmount ?? 0) - (h.ExtraLess ?? 0)),
                         AdditionalDiscount = h.ExtraLess ?? 0,
-                        GrandTotal = h.BillAmount ?? 0,
+                        GrandTotal = (h.BillAmount ?? 0) + (h.RoundOff ?? 0),
                         PaymentStatus = h.ActiveStatus ? "Completed" : "Cancelled",
                         SaleItems = new List<SaleItem>(),
                         Payments = new List<Payment>()
@@ -2016,7 +2097,27 @@ namespace Rxnxt.Business.Implementations
                         var stockRow = await FindStockAsync(d.ProductID, d.BatchNumber, d.ExpiryDate);
                         if (stockRow == null) return false;
                         var qtyToRestore = d.Qty ?? 0m;
-                        stockRow.PackQty = (stockRow.PackQty ?? 0m) + qtyToRestore;
+                        var openingBeforeCancel = stockRow.PackQty ?? 0m;
+                        stockRow.PackQty = openingBeforeCancel + qtyToRestore;
+
+                        _context.StockMovements.Add(StockMovementHelper.BuildMovement(
+                            productID: d.ProductID,
+                            productStockID: stockRow.ID,
+                            batchNumber: d.BatchNumber,
+                            expiryDate: d.ExpiryDate,
+                            openingBalance: openingBeforeCancel,
+                            baseQtyDelta: qtyToRestore,
+                            direction: "Inward",
+                            movementType: "SaleCancel",
+                            transactionQty: qtyToRestore,
+                            transactionUOMID: d.SaleUOMID,
+                            baseUOMID: d.BaseUOMID,
+                            referenceType: "Sale",
+                            referenceID: header.UniqueID,
+                            referenceLineID: d.UniqueID,
+                            referenceNo: header.BillNo,
+                            tenantId: header.TenantId,
+                            createdBy: header.CreatedBy));
                     }
 
                     header.ActiveStatus = false;
@@ -2215,6 +2316,42 @@ namespace Rxnxt.Business.Implementations
                 .Distinct()
                 .OrderBy(s => s)
                 .ToListAsync();
+        }
+
+        private async Task<string> GenerateBillNoAsync(string group, string prefixKey, string lastNoKey, string tenantId)
+        {
+            var prefix = await _context.ConfigSettings
+                .Where(s => s.SettingGroup == group && s.SettingKey == prefixKey && s.TenantId == tenantId)
+                .Select(s => s.SettingValue)
+                .FirstOrDefaultAsync() ?? "INV-";
+
+            var lastNoRow = await _context.ConfigSettings
+                .FirstOrDefaultAsync(s => s.SettingGroup == group && s.SettingKey == lastNoKey && s.TenantId == tenantId);
+
+            if (lastNoRow == null)
+            {
+                lastNoRow = new ConfigSettingRow
+                {
+                    UniqueID = Guid.NewGuid().ToString(),
+                    SettingGroup = group,
+                    SettingKey = lastNoKey,
+                    SettingValue = "0",
+                    SettingLevel = "CLIENT",
+                    TenantId = tenantId
+                };
+                _context.ConfigSettings.Add(lastNoRow);
+            }
+
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $@"UPDATE ConfigSetting SET SettingValue = CAST(CAST(SettingValue AS INT) + 1 AS NVARCHAR(500))
+                   WHERE SettingGroup = {group} AND SettingKey = {lastNoKey} AND TenantId = {tenantId}");
+
+            var newValue = await _context.ConfigSettings
+                .Where(s => s.SettingGroup == group && s.SettingKey == lastNoKey && s.TenantId == tenantId)
+                .Select(s => s.SettingValue)
+                .FirstAsync();
+
+            return $"{prefix}{newValue}";
         }
     }
 }
